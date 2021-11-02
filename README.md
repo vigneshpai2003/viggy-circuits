@@ -97,4 +97,4 @@ plt.legend(['q', 'i', 'di/dt'])
 plt.grid(True)
 plt.show()
 ```
-![Matplotlib plot](https://github.com/vigneshpai2003/Circuits/blob/master/plots/rlc1.png)
+![Matplotlib plot](https://github.com/vigneshpai2003/Circuits/blob/master/plots/rlc1.png?raw=True)
