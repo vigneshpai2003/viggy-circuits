@@ -57,8 +57,8 @@ class Device(object):
         self.init_current = init_current  # only significant if inductance is not None
 
     @classmethod
-    def process(cls, x: Union[Callable[[float], float], float]) -> Callable[[float], float]:
-        if callable(x):
+    def process(cls, x: Union[Callable[[float], float], float, None]) -> Union[Callable[[float], float], None]:
+        if callable(x) or x is None:
             return x
         else:
             return lambda t: x
