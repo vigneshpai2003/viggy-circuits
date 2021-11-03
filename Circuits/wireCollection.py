@@ -61,3 +61,6 @@ class WireCollection:
 
     def getDirection(self, wire: Wire) -> Direction:
         return self.__directions[self.__wires.index(wire)]
+
+    def getSign(self, wire: Wire) -> float:
+        return float(self.getDirection(wire))

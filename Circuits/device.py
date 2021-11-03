@@ -27,8 +27,8 @@ class Device:
         self.initCharge = initCharge
         self.initCurrent = initCurrent  # only significant if inductance is not None
 
-    @classmethod
-    def __process(cls, x: Union[Callable[[float], float], float, None]) -> Union[Callable[[float], float], None]:
+    @staticmethod
+    def __process(x: Union[Callable[[float], float], float, None]) -> Union[Callable[[float], float], None]:
         if callable(x) or x is None:
             return x
         else:

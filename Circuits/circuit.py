@@ -3,7 +3,7 @@ from __future__ import annotations
 import copy
 import random
 
-from numpy import arange
+import numpy as np
 from scipy import linalg, integrate
 
 from .error import CircuitError
@@ -12,7 +12,7 @@ from .wireCollection import WireCollection, Direction
 from typing import TYPE_CHECKING, FrozenSet
 
 if TYPE_CHECKING:
-    from typing import Set, List, Dict, Union, Tuple, Callable, Any, Any
+    from typing import Set, List, Dict, Tuple, Callable, Any, Any
 
     from .wire import Wire
     from .junction import Junction
@@ -199,76 +199,60 @@ class Circuit:
 
         return equations
 
-    def __derivatives(self, t: float, q: Dict[Wire, Union[Tuple[float], Tuple[float, float]]],
+    @staticmethod
+    def __derivatives(t: float, wires: List[Wire], charge: Dict[Wire, float], current: Dict[Wire, float],
                       first_law_equations: Set[WireCollection],
-                      second_law_equations: Set[WireCollection]) -> Dict[Wire, float]:
+                      second_law_equations: Set[WireCollection]) -> np.ndarray:
         """
-        t is time and q is dictionary corresponding each wire to their respective charges
+        :param t:  time
+        :param wires: list of wires
+        :param charge:  dictionary corresponding each wire to their respective charges
+        :param current:  dictionary corresponding each wire to their respective currents (LCR wire only)
 
-        q[wire] is of the form [q,] for wires without inductor
-        q[wire] is of the form [q, i] for wires with inductor
-
-        returns dq_dt for wires without inductor and d2q_dt2 for wires with inductor in the form of a dictionary
+        :return: di_dt for LCR wires and i for others in same order as wires
         """
-        degree = len(self.__effectiveWires)  # number of variables to solve for
-        wires = random.sample(tuple(self.__effectiveWires), degree)  # this will indicate order of wires in matrix
+        degree = len(wires)  # number of variables to solve for
 
         # R i = V
-        R = []
-        V = []
+        R = np.zeros((degree, degree))
+        V = np.zeros(degree)
 
         # fill R, V using first law
+        i = 0
         for equation in first_law_equations:
-            R_eq = [0.0] * degree
-            V_eq = 0.0
+            allLCR = all([wire.isLCR for wire in equation.wires])
+            for wire in equation.wires:
+                sign = equation.getSign(wire)
+                if wire.isLCR and not allLCR:
+                    V[i] -= sign * current[wire]
+                else:
+                    R[i, wires.index(wire)] = sign
 
-            if all([wire.isLCR for wire in equation.wires]):  # all are LCR
-                for wire in equation.wires:
-                    R_eq[wires.index(wire)] = float(equation.getDirection(wire))
-            else:
-                for wire in equation.wires:
-                    if wire.isLCR:  # if LCR then dq_dt is known
-                        V_eq -= float(equation.getDirection(wire)) * q[wire][1]
-                    else:
-                        R_eq[wires.index(wire)] = float(equation.getDirection(wire))
-
-            R.append(R_eq)
-            V.append(V_eq)
+            i += 1
 
         # fill R, V using second law
         for equation in second_law_equations:
-            R_eq = [0.0] * degree
-            V_eq = 0.0
-
             for wire in equation.wires:
-                sign = float(equation.getDirection(wire))
+                sign = equation.getSign(wire)
 
-                if wire.isLCR:  # if LCR
-                    R_eq[wires.index(wire)] = sign * wire.device.inductance(t)
+                if wire.isLCR:
+                    R[i, wires.index(wire)] = sign * wire.device.inductance(t)
 
                     # calculate potential drop due to resistor
-                    V_eq -= sign * wire.device.resistance(t) * q[wire][1]
+                    V[i] -= sign * wire.device.resistance(t) * current[wire]
                 else:
-                    R_eq[wires.index(wire)] = sign * wire.device.resistance(t)
+                    R[i, wires.index(wire)] = sign * wire.device.resistance(t)
 
                 # potential drop due to battery and capacitor
                 if wire.device.battery is not None:
-                    V_eq += sign * wire.device.battery(t)
+                    V[i] += sign * wire.device.battery(t)
 
                 if wire.device.capacitance is not None:
-                    V_eq -= sign * q[wire][0] / wire.device.capacitance(t)
+                    V[i] -= sign * charge[wire] / wire.device.capacitance(t)
 
-            R.append(R_eq)
-            V.append(V_eq)
+            i += 1
 
-        solution = linalg.solve(R, V)
-
-        derivatives = dict()
-
-        for i in range(degree):
-            derivatives[wires[i]] = solution[i]
-
-        return derivatives
+        return linalg.solve(R, V)
 
     def solve(self, end: float, dt: float) -> Dict[Wire, Tuple[List[float], List[List[float]]]]:
         # empty initialization of solution dictionary
@@ -284,11 +268,9 @@ class Circuit:
         # set initial conditions
         init_conditions = []
         for wire in wires:
-            if wire.device.inductance is not None:
-                # if LCR
+            if wire.isLCR:
                 init_conditions.extend([wire.device.initCharge, wire.device.initCurrent])
             else:
-                # if RC
                 init_conditions.append(wire.device.initCharge)
 
         for event in self.__get_intervals(end):
@@ -299,57 +281,57 @@ class Circuit:
             def derivative_wrapper(_t: float, _q: List[float]):
                 # convert x as a list to a dict to pass to self.__derivatives
                 q_dict = {}
-                _i = 0
-                for _wire in wires:
-                    if _wire.device.inductance is not None:
-                        # if LCR
-                        q_dict[_wire] = (_q[_i], _q[_i + 1])
-                        _i += 2
-                    else:
-                        # if RC
-                        q_dict[_wire] = (_q[_i],)
-                        _i += 1
+                i_dict = {}
 
-                derivatives_dict = self.__derivatives(_t, q_dict, first_law, second_law)
+                index = 0
+                for _wire in wires:
+                    q_dict[_wire] = _q[index]
+                    index += 1
+
+                    if _wire.isLCR:
+                        i_dict[_wire] = _q[index]
+                        index += 1
+
+                derivatives_dict = Circuit.__derivatives(_t, wires, q_dict, i_dict, first_law, second_law)
 
                 # convert dict obtained back to list with derivatives of q
                 _derivatives = []
                 for _wire in wires:
-                    if _wire.device.inductance is not None:
-                        # if LCR
-                        _derivatives.extend([q_dict[_wire][1], derivatives_dict[_wire]])
-                    else:
-                        # if RC
-                        _derivatives.append(derivatives_dict[_wire])
+                    if _wire.isLCR:
+                        _derivatives.append(i_dict[_wire])
+                    _derivatives.append(derivatives_dict[wires.index(_wire)])
                 return _derivatives
 
             # method = Nonstiff = ('RK45', 'RK23', 'DOP853'); Stiff = ('Radau', 'BDF'); Universal = 'LSODA'
             integrated_sol = integrate.solve_ivp(fun=derivative_wrapper, y0=init_conditions,
-                                                 t_span=event[0], t_eval=arange(*event[0], dt))
+                                                 t_span=event[0], t_eval=np.arange(*event[0], dt))
 
             # update solution
             for t_index in range(len(integrated_sol.t)):
                 time = integrated_sol.t[t_index]
 
-                # calculate dq_qt for RC and d2q_dt2 for LCR
-                q = dict()
+                # calculate i for RC and di_dt for LCR
+                q = {}
+                i = {}
 
-                i = 0
+                _i = 0
                 for wire in wires:
-                    if wire.device.inductance is not None:
-                        q[wire] = (integrated_sol.y[i][t_index], integrated_sol.y[i + 1][t_index])
-                        i += 2
-                    else:
-                        q[wire] = (integrated_sol.y[i][t_index],)
-                        i += 1
+                    q[wire] = integrated_sol.y[_i][t_index]
+                    _i += 1
+                    if wire.isLCR:
+                        i[wire] = integrated_sol.y[_i][t_index]
+                        _i += 1
 
-                derivatives = self.__derivatives(time, q, first_law, second_law)
+                derivatives = self.__derivatives(time, wires, q, i, first_law, second_law)
 
                 # add all values to solution
                 for wire in wires:
                     time_list, q_list = solution[wire]
                     time_list.append(time)
-                    q_list.append((*q[wire], derivatives[wire]))
+                    if wire.isLCR:
+                        q_list.append((q[wire], i[wire], derivatives[wires.index(wire)]))
+                    else:
+                        q_list.append((q[wire], derivatives[wires.index(wire)]))
 
                 # current and its derivative is 0 for void_wires, charge is init_charge or last known value
                 for wire in self.__voidWires:
