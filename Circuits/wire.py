@@ -41,11 +41,12 @@ class Wire:
     def junctions(self) -> Tuple[Junction, Junction]:
         return self.__junction1, self.__junction2
 
+    @property
     def isLCR(self) -> bool:
         """
         :return: whether Wire.device has capacitor, resistor and inductor
         """
-        return self.__device.inductance is not None
+        return self.device.inductance is not None
 
     def connect(self, junction: Junction):
         """

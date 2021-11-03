@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 import copy
-from random import sample
+import random
 
 from numpy import arange
 from scipy import linalg, integrate
@@ -9,7 +9,7 @@ from scipy import linalg, integrate
 from .error import CircuitError
 from .wireCollection import WireCollection, Direction
 
-from typing import TYPE_CHECKING
+from typing import TYPE_CHECKING, FrozenSet
 
 if TYPE_CHECKING:
     from typing import Set, List, Dict, Union, Tuple, Callable, Any, Any
@@ -47,8 +47,7 @@ class Circuit:
 
     def __simplifyCircuit(self):
         """
-        sorts the wires into effective wires and null wires (which do not contribute to calculation);
-        similarly for junctions
+        sorts the wires and junctions as effective or void
         """
         # reset the last simplification
         self.__voidWires = set()
@@ -78,90 +77,89 @@ class Circuit:
         self.__effectiveWires = self.__wires - self.__voidWires
         self.__effectiveJunctions = self.__junctions - self.__voidJunctions
 
-    def __get_loops(self, base_wire: Wire) -> List[WireCollection]:
+    def __getLoopsWith(self, wire: Wire) -> List[WireCollection]:
         """
-        :param base_wire: should be in self.__effectiveWires
-        :return: all the closed loops with the base_wire;
+        this function should be called after simplifying circuit
+        :param wire: should be in self.__effectiveWires
+        :return: all the closed loops with the wire
         """
         loops = []
-        endpoint = base_wire.junction1
+        endpoint = wire.junction1
 
-        def __loops(current_junction: Junction, current_wire: Wire,
-                    loop_path: WireCollection, parsed_junctions: list):
+        def __loops(currentJunction: Junction, currentWire: Wire,
+                    loopPath: WireCollection, parsedJunctions: Set[Junction]):
             """
-            recursive function that calculates closed loops
+            :param currentJunction: the junction up to which the path was calculated
+            :param currentWire: the wire up to which the path was calculated
+            :param loopPath: the path of the loop so far
+            :param parsedJunctions: the junctions that are already a part of the loop
+            :return:
             """
-            for new_wire in current_junction.otherWires(current_wire) - self.__voidWires:
+            for newWire in currentJunction.otherWires(currentWire) - self.__voidWires:
                 """
-                for every wire in the junction,
-                an attempt is made to add it to loop_path
+                for every wire in the junction, an attempt is made to add it to loop_path
                 if failed, the entire loop path corresponding up to that point is discarded
                 """
-                if new_wire.isNull:
-                    continue
-
                 # direction is assumed to be from junction1 to junction2 always
-                if current_junction is new_wire.junction1:
+                if currentJunction is newWire.junction1:
                     sign = Direction.FORWARD
-                elif current_junction is new_wire.junction2:
+                elif currentJunction is newWire.junction2:
                     sign = Direction.BACKWARD
                 else:
-                    raise CircuitError("sign could not be deduced")
+                    raise CircuitError("sign of wire could not be deduced")
 
-                # new_loop_path must be copied and not referenced
-                new_loop_path = copy.copy(loop_path)
-                new_loop_path.append(new_wire, sign)
+                # newLoopPath must be copied and not referenced
+                newLoopPath = copy.copy(loopPath)
+                newLoopPath.append(newWire, sign)
 
-                next_junction = new_wire.otherJunction(current_junction)
+                newJunction = newWire.otherJunction(currentJunction)
 
-                if next_junction is endpoint:
-                    # if closed loop is found
-                    loops.append(new_loop_path)
+                if newJunction is endpoint:  # if closed loop is found
+                    loops.append(newLoopPath)
                     continue
-                elif next_junction in parsed_junctions:
-                    # if junction was already encountered before
+                elif newJunction in parsedJunctions:  # if junction was already encountered before
                     continue
 
-                __loops(current_junction=next_junction, current_wire=new_wire,
-                        loop_path=new_loop_path, parsed_junctions=[*parsed_junctions, next_junction])
+                __loops(newJunction, newWire, newLoopPath, parsedJunctions.union({newJunction}))
 
-        __loops(current_junction=base_wire.junction2, current_wire=base_wire,
-                loop_path=WireCollection((base_wire, Direction.FORWARD)), parsed_junctions=[base_wire.junction2])
+        __loops(currentJunction=wire.junction2, currentWire=wire,
+                loopPath=WireCollection((wire, Direction.FORWARD)), parsedJunctions={wire.junction2})
 
         return loops
 
-    def __first_law_wires(self) -> Set[WireCollection]:
+    def __firstLawWires(self) -> Set[WireCollection]:
         """
-        return the wires to be used in implementation of Kirchhoff's First Law;
+        :return: the wires to be used in implementation of Kirchhoff's First Law
         """
-        equations = set()
-        # possible_equations is updated to include all possible combinations of already formed equations
-        possible_equations = set()
+        equations: Set[WireCollection] = set()
+
+        # possibleEquations is updated to include all possible combinations of already formed equations
+        possibleEquations: Set[FrozenSet[Wire]] = set()
 
         for junction in self.__effectiveJunctions:
             # remove wires that are void
-            junction_wires = junction.wires - self.__voidWires
+            junctionWires = junction.wires - self.__voidWires
 
-            if all([wire.device.inductance is not None for wire in junction_wires]):
-                # if all wires have inductor
-                effective_junction_wires = junction_wires.copy()
+            if all([wire.isLCR for wire in junctionWires]):  # if all wires have inductor
+                effectiveJunctionWires = junctionWires.copy()
             else:
                 # if some or no wires have inductor
                 # current in all wires with inductors are known in __derivatives
                 # only those without inductor should be included
-                effective_junction_wires = set()
-                for wire in junction_wires:
-                    if wire.device.inductance is None:
-                        effective_junction_wires.add(wire)
+                effectiveJunctionWires = set()
+                for wire in junctionWires:
+                    if not wire.isLCR:
+                        effectiveJunctionWires.add(wire)
 
             # check if these wire can be derived from existing wire equations
-            if effective_junction_wires in possible_equations:
+            if effectiveJunctionWires in possibleEquations:
                 continue
 
             # update possible combos
-            possible_equations.add(frozenset(effective_junction_wires))
-            possible_equations.update(set(wire_combo.symmetric_difference(effective_junction_wires)
-                                          for wire_combo in possible_equations))
+            possibleEquations.add(frozenset(effectiveJunctionWires))  # cant create set of sets
+            possibleEquations.update(set(equationWires.symmetric_difference(effectiveJunctionWires)
+                                         for equationWires in possibleEquations))
+
             """
             if 2 equation in the currents of a certain set of wire exists,
             another equation can be created by subtracting them,
@@ -171,7 +169,7 @@ class Circuit:
             """
 
             loop = WireCollection()
-            for wire in junction_wires:
+            for wire in junctionWires:
                 if junction is wire.junction1:
                     loop.append(wire, Direction.FORWARD)
                 else:
@@ -180,21 +178,23 @@ class Circuit:
 
         return equations
 
-    def __second_law_wires(self, limit: int) -> Set[WireCollection]:
+    def __secondLawWires(self, limit=None) -> Set[WireCollection]:
         """
+        :param limit: the number of equations needed
         return the wires to be used in implementation of Kirchhoff's Second Law;
         """
         equations = set()
-        parsed_wires = set()
+        parsedWires = set()
 
         for wire in self.__effectiveWires:
-            for loop in self.__get_loops(base_wire=wire):
-                if set(loop.wires).issubset(parsed_wires):
-                    # if equation in these variablles is already formed
+            for loop in self.__getLoopsWith(wire):
+                if set(loop.wires).issubset(parsedWires):  # if equation in these variablles is already formed
                     continue
-                parsed_wires.update(set(loop.wires))
+
+                parsedWires.update(set(loop.wires))
                 equations.add(loop)
-                if len(equations) == limit:
+
+                if len(equations) == limit:  # if limit is reached no need to do further iterations
                     return equations
 
         return equations
@@ -203,15 +203,15 @@ class Circuit:
                       first_law_equations: Set[WireCollection],
                       second_law_equations: Set[WireCollection]) -> Dict[Wire, float]:
         """
-        t is time and x is dictionary corresponding each wire to their respective charges
+        t is time and q is dictionary corresponding each wire to their respective charges
 
-        q is of the form [q,] for wires without inductor
-        q is of the form [q, dq_qt] for wires with inductor
+        q[wire] is of the form [q,] for wires without inductor
+        q[wire] is of the form [q, i] for wires with inductor
 
         returns dq_dt for wires without inductor and d2q_dt2 for wires with inductor in the form of a dictionary
         """
         degree = len(self.__effectiveWires)  # number of variables to solve for
-        wires = sample(tuple(self.__effectiveWires), degree)  # this will indicate order of wires in matrix
+        wires = random.sample(tuple(self.__effectiveWires), degree)  # this will indicate order of wires in matrix
 
         # R i = V
         R = []
@@ -222,18 +222,14 @@ class Circuit:
             R_eq = [0.0] * degree
             V_eq = 0.0
 
-            if all([wire.device.inductance is not None for wire in equation.wires]):
-                # all are LCR
+            if all([wire.isLCR for wire in equation.wires]):  # all are LCR
                 for wire in equation.wires:
                     R_eq[wires.index(wire)] = float(equation.getDirection(wire))
             else:
-                # if atleast one is RC
                 for wire in equation.wires:
-                    if wire.device.inductance is not None:
-                        # if LCR then dq_dt is known
+                    if wire.isLCR:  # if LCR then dq_dt is known
                         V_eq -= float(equation.getDirection(wire)) * q[wire][1]
                     else:
-                        # if RC
                         R_eq[wires.index(wire)] = float(equation.getDirection(wire))
 
             R.append(R_eq)
@@ -247,19 +243,18 @@ class Circuit:
             for wire in equation.wires:
                 sign = float(equation.getDirection(wire))
 
-                if wire.device.inductance is not None:
-                    # if LCR
+                if wire.isLCR:  # if LCR
                     R_eq[wires.index(wire)] = sign * wire.device.inductance(t)
 
                     # calculate potential drop due to resistor
                     V_eq -= sign * wire.device.resistance(t) * q[wire][1]
                 else:
-                    # if RC
                     R_eq[wires.index(wire)] = sign * wire.device.resistance(t)
 
                 # potential drop due to battery and capacitor
                 if wire.device.battery is not None:
                     V_eq += sign * wire.device.battery(t)
+
                 if wire.device.capacitance is not None:
                     V_eq -= sign * q[wire][0] / wire.device.capacitance(t)
 
@@ -284,7 +279,7 @@ class Circuit:
         # calculate effective wires and junctions
         self.__simplifyCircuit()
         degree = len(self.__effectiveWires)
-        wires = sample(list(self.__effectiveWires), degree)
+        wires = random.sample(list(self.__effectiveWires), degree)
 
         # set initial conditions
         init_conditions = []
@@ -298,8 +293,8 @@ class Circuit:
 
         for event in self.__get_intervals(end):
             # calculate first_law and second_law
-            first_law = self.__first_law_wires()
-            second_law = self.__second_law_wires(limit=degree - len(first_law))
+            first_law = self.__firstLawWires()
+            second_law = self.__secondLawWires(limit=degree - len(first_law))
 
             def derivative_wrapper(_t: float, _q: List[float]):
                 # convert x as a list to a dict to pass to self.__derivatives
@@ -377,7 +372,7 @@ class Circuit:
             # recalculate effective wires and junctions
             self.__simplifyCircuit()
             degree = len(self.__effectiveWires)
-            wires = sample(list(self.__effectiveWires), degree)
+            wires = random.sample(list(self.__effectiveWires), degree)
 
             # set init_conditions to the last calculated values
             init_conditions = []
@@ -387,7 +382,7 @@ class Circuit:
 
         return solution
 
-    def add_event(self, time: float, event: Callable, args=None, kwargs=None):
+    def addEvent(self, time: float, event: Callable, args=None, kwargs=None):
         """
         when solving, the event is called using args and kwargs at specified time;
         multiple events are allowed at same time, but add_event must be called multiple times;

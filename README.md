@@ -7,6 +7,7 @@ solution (i.e. current) in each wire of the circuit.
 
 ``numpy``, ``scipy.linalg``, ``scipy.integrate``
 
+###Note: The following tutorial is based on an older version
 ### Basic Tutorial
 
 The Circuit object will be responsible for all calculations

@@ -34,10 +34,10 @@ def toggle(_index):
 
 
 # events are functions that are executed with specified arguments at specified time in the simulation
-circuit.add_event(time=3.0, event=toggle, args=(3,))
-circuit.add_event(time=7.0, event=toggle, args=(2,))
-circuit.add_event(time=7.0, event=toggle, args=(3,))
-circuit.add_event(time=8.0, event=toggle, args=(2,))
+circuit.addEvent(time=3.0, event=toggle, args=(3,))
+circuit.addEvent(time=7.0, event=toggle, args=(2,))
+circuit.addEvent(time=7.0, event=toggle, args=(3,))
+circuit.addEvent(time=8.0, event=toggle, args=(2,))
 
 end = 20
 solution = circuit.solve(end=end, dt=0.01)
