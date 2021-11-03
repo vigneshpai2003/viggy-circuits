@@ -13,21 +13,13 @@ if TYPE_CHECKING:
 
 
 class Wire:
-    def __init__(self, device: Device, junction1: Junction = None, junction2: Junction = None):
-
+    def __init__(self, device: Device):
         self.__switch = Switch()
 
         self.__device = device
 
-        if junction1 is None:
-            self.__junction1 = Junction()
-        else:
-            self.__junction1 = junction1
-
-        if junction2 is None:
-            self.__junction2 = Junction()
-        else:
-            self.__junction2 = junction1
+        self.__junction1 = Junction()
+        self.__junction2 = Junction()
 
     @property
     def device(self) -> Device:
@@ -49,37 +41,47 @@ class Wire:
     def junctions(self) -> Tuple[Junction, Junction]:
         return self.__junction1, self.__junction2
 
-    def is_LCR(self) -> bool:
+    def isLCR(self) -> bool:
         """
-        whether wire.device has capacitor, resistor and inductor
+        :return: whether Wire.device has capacitor, resistor and inductor
         """
         return self.__device.inductance is not None
 
     def connect(self, junction: Junction):
         """
-        not meant to be called directly, see Circuit.connect
+        not meant to be called by user, see Circuit.connect
         """
-        if self.connection_complete:
+        if self.connectionComplete:
             raise CircuitError(f"Cannot connect 3rd wire to {self}")
 
-        if len(self.__junction1.wires) == 0:
+        # connect to whichever junction is unused
+        if len(self.junction1.wires) == 0:
             self.__junction1 = junction
-        elif len(self.__junction2.wires) == 0:
+        elif len(self.junction2.wires) == 0:
             self.__junction2 = junction
 
     @property
-    def connection_complete(self) -> bool:
-        return self.__junction1.is_used and self.__junction2.is_used
+    def connectionComplete(self) -> bool:
+        """
+        :return: whether wire is connected to two junctions
+        """
+        return self.__junction1.isUsed and self.__junction2.isUsed
 
     @property
-    def is_null(self) -> bool:
-        return self.__switch.is_open or not self.connection_complete \
-               or len(self.__junction1.wires) == 1 or len(self.__junction2.wires) == 1
+    def isNull(self) -> bool:
+        """
+        :return: true if either of the junctions has less than 2 wires or switch is open
+        """
+        return any([self.switch.isOpen, not self.connectionComplete,
+                    len(self.junction1.wires) == 1, len(self.junction2.wires) == 1])
 
-    def swap_junctions(self):
+    def swapJunctions(self):
+        """
+        swaps the internal order of junctions
+        """
         self.__junction1, self.__junction2 = self.__junction2, self.__junction1
 
-    def other_junction(self, junction: Junction):
+    def otherJunction(self, junction: Junction) -> Junction:
         if junction is self.__junction1:
             return self.__junction2
         elif junction is self.__junction2:

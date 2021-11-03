@@ -11,11 +11,11 @@ wires = [Wire(Device(resistance=lambda t: 1.5 + sin(t),
                      capacitance=1.0,
                      inductance=0.2)),
          Wire(Device(resistance=0.1,
-                     battery=AC(emf_rms=1.0, omega=5.0, phi=0.5),  # AC generates an alternating emf function
+                     battery=generatorAC(emf=1.0, f=1.0, phi=0.5),  # AC generates an alternating emf function
                      capacitance=1.0)),
          Wire(Device(resistance=1.1,
                      capacitance=lambda t: 1.5 + sin(t),
-                     init_charge=-5.0,
+                     initCharge=-5.0,
                      inductance=1.0)),
          Wire(Device(resistance=1.0,
                      capacitance=1.0,
@@ -23,9 +23,9 @@ wires = [Wire(Device(resistance=lambda t: 1.5 + sin(t),
 
 junctions = [Junction(), Junction(), Junction()]
 
-circuit.connect(junctions[0], {wires[0], wires[2], wires[3]})
-circuit.connect(junctions[1], {wires[0], wires[1]})
-circuit.connect(junctions[2], {wires[1], wires[2], wires[3]})
+circuit.connect(junctions[0], wires[0], wires[2], wires[3])
+circuit.connect(junctions[1], wires[0], wires[1])
+circuit.connect(junctions[2], wires[1], wires[2], wires[3])
 
 
 def toggle(_index):

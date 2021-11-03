@@ -11,30 +11,30 @@ class Device:
                  battery: Union[Callable[[float], float], float, None] = None,
                  capacitance: Union[Callable[[float], float], float, None] = None,
                  inductance: Union[Callable[[float], float], float, None] = None,
-                 init_charge=0.0, init_current=0.0):
+                 initCharge=0.0, initCurrent=0.0):
         """
         :param resistance: a float or function of time that returns float
         :param battery: optional
         :param capacitance: optional
         :param inductance: optional
-        :param init_charge: optional, only need to change if capacitance is given
-        :param init_current: optional, only need to change if inductance is given
+        :param initCharge: optional, only need to change if capacitance is given
+        :param initCurrent: optional, only need to change if inductance is given
         """
-        self.resistance = Device.process(resistance)
-        self.battery = Device.process(battery)  # internal battery
-        self.capacitance = Device.process(capacitance)
-        self.inductance = Device.process(inductance)
-        self.init_charge = init_charge
-        self.init_current = init_current  # only significant if inductance is not None
+        self.resistance = Device.__process(resistance)
+        self.battery = Device.__process(battery)  # internal battery
+        self.capacitance = Device.__process(capacitance)
+        self.inductance = Device.__process(inductance)
+        self.initCharge = initCharge
+        self.initCurrent = initCurrent  # only significant if inductance is not None
 
     @classmethod
-    def process(cls, x: Union[Callable[[float], float], float, None]) -> Union[Callable[[float], float], None]:
+    def __process(cls, x: Union[Callable[[float], float], float, None]) -> Union[Callable[[float], float], None]:
         if callable(x) or x is None:
             return x
         else:
             return lambda t: x
 
-    def potential_drop(self, t: float, q: float = 0.0, dq_dt: float = 0.0, d2q_dt2: float = 0.0):
+    def potentialDrop(self, t: float, q=0.0, dq_dt=0.0, d2q_dt2=0.0):
 
         v = 0.0
 

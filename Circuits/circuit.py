@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import copy
 from random import sample
 
 from numpy import arange
@@ -19,15 +20,21 @@ if TYPE_CHECKING:
 
 class Circuit:
     def __init__(self):
+        # all the wires and junctions in the circuit
         self.__wires: Set[Wire] = set()
-        self.__effective_wires: Set[Wire] = set()
-        self.__void_wires: Set[Wire] = set()
         self.__junctions: Set[Junction] = set()
-        self.__effective_junctions: Set[Junction] = set()
-        self.__void_junctions: Set[Junction] = set()
+
+        # all the wires and junctions that are required to simulate (changes every iteration)
+        self.__effectiveWires: Set[Wire] = set()
+        self.__effectiveJunctions: Set[Junction] = set()
+
+        # all the wires and junctions that do not contribite to circuit (changes every iteration)
+        self.__voidWires: Set[Wire] = set()
+        self.__voidJunctions: Set[Junction] = set()
+
         self.__events = {}
 
-    def connect(self, junction: Junction, wires: Set[Wire]):
+    def connect(self, junction: Junction, *wires: Wire):
         """
         function that connects junction to wire and each wire to junction
         """
@@ -38,35 +45,43 @@ class Circuit:
         for wire in wires:
             wire.connect(junction)
 
-    def __simplify(self):
+    def __simplifyCircuit(self):
         """
         sorts the wires into effective wires and null wires (which do not contribute to calculation);
         similarly for junctions
         """
-        self.__void_wires = set()
-        self.__void_wires = set()
+        # reset the last simplification
+        self.__voidWires = set()
+        self.__voidJunctions = set()
 
+        # all null wires are automatically void
         for wire in self.__wires:
-            if wire.is_null:
-                self.__void_wires.add(wire)
+            if wire.isNull:
+                self.__voidWires.add(wire)
 
-        void_junction_count = -1
-        while void_junction_count != 0:  # if no void junctions are found
-            void_junction_count = 0
+        # make it -1 so it enters while loop
+        voidJunctionCount = -1
+
+        while voidJunctionCount != 0:  # if no void junctions are found
+            voidJunctionCount = 0
+
             # find void junctions
-            for junction in self.__junctions - self.__void_junctions:
-                if len(junction.wires - self.__void_wires) in (0, 1):
-                    void_junction_count += 1
-                    self.__void_junctions.add(junction)
-                    self.__void_wires.update(junction.wires)
+            for junction in self.__junctions - self.__voidJunctions:
+                # (junction.wires - self.__voidWires) is the effective wires attached to the junction
+                if len(junction.wires - self.__voidWires) in (0, 1):
+                    voidJunctionCount += 1
+                    self.__voidJunctions.add(junction)
 
-        self.__effective_wires = self.__wires - self.__void_wires
-        self.__effective_junctions = self.__junctions - self.__void_junctions
+                    # if junction is void, all its wires also become void
+                    self.__voidWires.update(junction.wires)
+
+        self.__effectiveWires = self.__wires - self.__voidWires
+        self.__effectiveJunctions = self.__junctions - self.__voidJunctions
 
     def __get_loops(self, base_wire: Wire) -> List[WireCollection]:
         """
-        returns all the closed loops with the base_wire;
-        base_wire should be an effective wire
+        :param base_wire: should be in self.__effectiveWires
+        :return: all the closed loops with the base_wire;
         """
         loops = []
         endpoint = base_wire.junction1
@@ -74,15 +89,15 @@ class Circuit:
         def __loops(current_junction: Junction, current_wire: Wire,
                     loop_path: WireCollection, parsed_junctions: list):
             """
-            recursive function that calculates closed loops;
+            recursive function that calculates closed loops
             """
-            for new_wire in current_junction.other_wires(current_wire) - self.__void_wires:
+            for new_wire in current_junction.otherWires(current_wire) - self.__voidWires:
                 """
                 for every wire in the junction,
                 an attempt is made to add it to loop_path
                 if failed, the entire loop path corresponding up to that point is discarded
                 """
-                if new_wire.is_null:
+                if new_wire.isNull:
                     continue
 
                 # direction is assumed to be from junction1 to junction2 always
@@ -94,10 +109,10 @@ class Circuit:
                     raise CircuitError("sign could not be deduced")
 
                 # new_loop_path must be copied and not referenced
-                new_loop_path = loop_path.shallow_copy()
+                new_loop_path = copy.copy(loop_path)
                 new_loop_path.append(new_wire, sign)
 
-                next_junction = new_wire.other_junction(current_junction)
+                next_junction = new_wire.otherJunction(current_junction)
 
                 if next_junction is endpoint:
                     # if closed loop is found
@@ -123,9 +138,9 @@ class Circuit:
         # possible_equations is updated to include all possible combinations of already formed equations
         possible_equations = set()
 
-        for junction in self.__effective_junctions:
+        for junction in self.__effectiveJunctions:
             # remove wires that are void
-            junction_wires = junction.wires - self.__void_wires
+            junction_wires = junction.wires - self.__voidWires
 
             if all([wire.device.inductance is not None for wire in junction_wires]):
                 # if all wires have inductor
@@ -172,7 +187,7 @@ class Circuit:
         equations = set()
         parsed_wires = set()
 
-        for wire in self.__effective_wires:
+        for wire in self.__effectiveWires:
             for loop in self.__get_loops(base_wire=wire):
                 if set(loop.wires).issubset(parsed_wires):
                     # if equation in these variablles is already formed
@@ -195,8 +210,8 @@ class Circuit:
 
         returns dq_dt for wires without inductor and d2q_dt2 for wires with inductor in the form of a dictionary
         """
-        degree = len(self.__effective_wires)  # number of variables to solve for
-        wires = sample(tuple(self.__effective_wires), degree)  # this will indicate order of wires in matrix
+        degree = len(self.__effectiveWires)  # number of variables to solve for
+        wires = sample(tuple(self.__effectiveWires), degree)  # this will indicate order of wires in matrix
 
         # R i = V
         R = []
@@ -210,16 +225,16 @@ class Circuit:
             if all([wire.device.inductance is not None for wire in equation.wires]):
                 # all are LCR
                 for wire in equation.wires:
-                    R_eq[wires.index(wire)] = float(equation.get_direction(wire))
+                    R_eq[wires.index(wire)] = float(equation.getDirection(wire))
             else:
                 # if atleast one is RC
                 for wire in equation.wires:
                     if wire.device.inductance is not None:
                         # if LCR then dq_dt is known
-                        V_eq -= float(equation.get_direction(wire)) * q[wire][1]
+                        V_eq -= float(equation.getDirection(wire)) * q[wire][1]
                     else:
                         # if RC
-                        R_eq[wires.index(wire)] = float(equation.get_direction(wire))
+                        R_eq[wires.index(wire)] = float(equation.getDirection(wire))
 
             R.append(R_eq)
             V.append(V_eq)
@@ -230,7 +245,7 @@ class Circuit:
             V_eq = 0.0
 
             for wire in equation.wires:
-                sign = float(equation.get_direction(wire))
+                sign = float(equation.getDirection(wire))
 
                 if wire.device.inductance is not None:
                     # if LCR
@@ -267,19 +282,19 @@ class Circuit:
             solution[wire] = ([], [])
 
         # calculate effective wires and junctions
-        self.__simplify()
-        degree = len(self.__effective_wires)
-        wires = sample(list(self.__effective_wires), degree)
+        self.__simplifyCircuit()
+        degree = len(self.__effectiveWires)
+        wires = sample(list(self.__effectiveWires), degree)
 
         # set initial conditions
         init_conditions = []
         for wire in wires:
             if wire.device.inductance is not None:
                 # if LCR
-                init_conditions.extend([wire.device.init_charge, wire.device.init_current])
+                init_conditions.extend([wire.device.initCharge, wire.device.initCurrent])
             else:
                 # if RC
-                init_conditions.append(wire.device.init_charge)
+                init_conditions.append(wire.device.initCharge)
 
         for event in self.__get_intervals(end):
             # calculate first_law and second_law
@@ -342,11 +357,11 @@ class Circuit:
                     q_list.append((*q[wire], derivatives[wire]))
 
                 # current and its derivative is 0 for void_wires, charge is init_charge or last known value
-                for wire in self.__void_wires:
+                for wire in self.__voidWires:
                     time_list, q_list = solution[wire]
                     time_list.append(time)
                     if len(q_list) == 0:
-                        charge = wire.device.init_charge
+                        charge = wire.device.initCharge
                     else:
                         charge = q_list[-1][0]
 
@@ -360,9 +375,9 @@ class Circuit:
                 func[0](*func[1], **func[2])
 
             # recalculate effective wires and junctions
-            self.__simplify()
-            degree = len(self.__effective_wires)
-            wires = sample(list(self.__effective_wires), degree)
+            self.__simplifyCircuit()
+            degree = len(self.__effectiveWires)
+            wires = sample(list(self.__effectiveWires), degree)
 
             # set init_conditions to the last calculated values
             init_conditions = []

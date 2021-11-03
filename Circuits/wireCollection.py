@@ -47,7 +47,7 @@ class WireCollection:
     def __len__(self):
         return len(self.__wires)
 
-    def shallow_copy(self) -> WireCollection:
+    def __copy__(self) -> WireCollection:
         new_obj = WireCollection()
         new_obj.__wires = [wire for wire in self.__wires]
         new_obj.__directions = [direction for direction in self.__directions]
@@ -59,5 +59,5 @@ class WireCollection:
         self.__wires.append(wire)
         self.__directions.append(direction)
 
-    def get_direction(self, wire: Wire) -> Direction:
+    def getDirection(self, wire: Wire) -> Direction:
         return self.__directions[self.__wires.index(wire)]
