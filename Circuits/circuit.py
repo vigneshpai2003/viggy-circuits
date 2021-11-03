@@ -201,8 +201,8 @@ class Circuit:
 
     @staticmethod
     def __derivatives(t: float, wires: List[Wire], charge: Dict[Wire, float], current: Dict[Wire, float],
-                      first_law_equations: Set[WireCollection],
-                      second_law_equations: Set[WireCollection]) -> np.ndarray:
+                      firstLawEquations: Set[WireCollection],
+                      secondLawEquations: Set[WireCollection]) -> np.ndarray:
         """
         :param t:  time
         :param wires: list of wires
@@ -219,7 +219,7 @@ class Circuit:
 
         # fill R, V using first law
         i = 0
-        for equation in first_law_equations:
+        for equation in firstLawEquations:
             allLCR = all([wire.isLCR for wire in equation.wires])
             for wire in equation.wires:
                 sign = equation.getSign(wire)
@@ -231,7 +231,7 @@ class Circuit:
             i += 1
 
         # fill R, V using second law
-        for equation in second_law_equations:
+        for equation in secondLawEquations:
             for wire in equation.wires:
                 sign = equation.getSign(wire)
 
@@ -254,6 +254,40 @@ class Circuit:
 
         return linalg.solve(R, V)
 
+    @staticmethod
+    def __derivativeWrapper(t: float, x: List[float], wires: List[Wire],
+                            firstLawEquations: Set[WireCollection],
+                            secondLawEquations: Set[WireCollection]) -> List[float]:
+        """
+        This function is a wrapper for Circuit.__derivatives to convert it into a function usable by scipy
+        :param t: time
+        :param x: a list of charge and current values
+        :return: the corresponding derivatives of x
+        """
+        # first convert inputs into form that can be used in Circuit.__derivatives
+        charge = {}
+        current = {}
+
+        i = 0
+        for wire in wires:
+            charge[wire] = x[i]
+            i += 1
+
+            if wire.isLCR:
+                current[wire] = x[i]
+                i += 1
+
+        _derivatives = Circuit.__derivatives(t, wires, charge, current, firstLawEquations, secondLawEquations)
+
+        # convert output of Circuit.__derivatives into derivatives of input x
+        derivatives = []
+        for wire in wires:
+            if wire.isLCR:
+                derivatives.append(current[wire])
+            derivatives.append(_derivatives[wires.index(wire)])
+
+        return derivatives
+
     def solve(self, end: float, dt: float) -> Dict[Wire, Tuple[List[float], List[List[float]]]]:
         # empty initialization of solution dictionary
         solution = dict()
@@ -266,45 +300,21 @@ class Circuit:
         wires = random.sample(list(self.__effectiveWires), degree)
 
         # set initial conditions
-        init_conditions = []
+        initConditions = []
         for wire in wires:
+            initConditions.append(wire.device.initCharge)
             if wire.isLCR:
-                init_conditions.extend([wire.device.initCharge, wire.device.initCurrent])
-            else:
-                init_conditions.append(wire.device.initCharge)
+                initConditions.append(wire.device.initCurrent)
 
-        for event in self.__get_intervals(end):
-            # calculate first_law and second_law
-            first_law = self.__firstLawWires()
-            second_law = self.__secondLawWires(limit=degree - len(first_law))
+        for event in self.__getIntervals(end):
+            # calculate firstLaw and secondLaw
+            firstLaw = self.__firstLawWires()
+            secondLaw = self.__secondLawWires(limit=degree - len(firstLaw))
 
-            def derivative_wrapper(_t: float, _q: List[float]):
-                # convert x as a list to a dict to pass to self.__derivatives
-                q_dict = {}
-                i_dict = {}
-
-                index = 0
-                for _wire in wires:
-                    q_dict[_wire] = _q[index]
-                    index += 1
-
-                    if _wire.isLCR:
-                        i_dict[_wire] = _q[index]
-                        index += 1
-
-                derivatives_dict = Circuit.__derivatives(_t, wires, q_dict, i_dict, first_law, second_law)
-
-                # convert dict obtained back to list with derivatives of q
-                _derivatives = []
-                for _wire in wires:
-                    if _wire.isLCR:
-                        _derivatives.append(i_dict[_wire])
-                    _derivatives.append(derivatives_dict[wires.index(_wire)])
-                return _derivatives
-
-            # method = Nonstiff = ('RK45', 'RK23', 'DOP853'); Stiff = ('Radau', 'BDF'); Universal = 'LSODA'
-            integrated_sol = integrate.solve_ivp(fun=derivative_wrapper, y0=init_conditions,
-                                                 t_span=event[0], t_eval=np.arange(*event[0], dt))
+            # method: Nonstiff = ('RK45', 'RK23', 'DOP853'); Stiff = ('Radau', 'BDF'); Universal = 'LSODA'
+            integrated_sol = integrate.solve_ivp(fun=Circuit.__derivativeWrapper, y0=initConditions,
+                                                 t_span=event[0], t_eval=np.arange(*event[0], dt),
+                                                 args=(wires, firstLaw, secondLaw))
 
             # update solution
             for t_index in range(len(integrated_sol.t)):
@@ -322,7 +332,7 @@ class Circuit:
                         i[wire] = integrated_sol.y[_i][t_index]
                         _i += 1
 
-                derivatives = self.__derivatives(time, wires, q, i, first_law, second_law)
+                derivatives = self.__derivatives(time, wires, q, i, firstLaw, secondLaw)
 
                 # add all values to solution
                 for wire in wires:
@@ -356,11 +366,11 @@ class Circuit:
             degree = len(self.__effectiveWires)
             wires = random.sample(list(self.__effectiveWires), degree)
 
-            # set init_conditions to the last calculated values
-            init_conditions = []
+            # set initConditions to the last calculated values
+            initConditions = []
             for wire in wires:
                 time_list, q_list = solution[wire]
-                init_conditions.extend(q_list[-1][:-1])
+                initConditions.extend(q_list[-1][:-1])
 
         return solution
 
@@ -379,7 +389,7 @@ class Circuit:
         else:
             self.__events[time] = [(event, args, kwargs)]
 
-    def __get_intervals(self, end: float) -> List[Tuple[Tuple[float, float], List[Tuple[Callable, Any, Any]]]]:
+    def __getIntervals(self, end: float) -> List[Tuple[Tuple[float, float], List[Tuple[Callable, Any, Any]]]]:
         """
         event = {t0 = [events, ...], t1 = [events, ...], ...};
         splits time interval into smaller intervals separated by event execution;
