@@ -1,7 +1,7 @@
 """
 <<<THIS FILE SHOWS AN EXAMPLE OF HOW TO SIMULATE AN LCR CIRCUIT>>>
 """
-from circuits import *
+from Circuits import *
 from matplotlib import pyplot as plt
 
 circuit = Circuit()

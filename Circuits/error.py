@@ -1,0 +1,2 @@
+class CircuitError(Exception):
+    pass
