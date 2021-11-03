@@ -14,8 +14,8 @@ solution (i.e. current) in each wire of the circuit.
 `pip install .`
 
 ### Basic Tutorial
-######Note: The following tutorial is based on an older version (to be updated soon)
-###### For now go through samples/lcr.py
+#### Note: The following tutorial is based on an older version (to be updated soon),
+#### For now go through samples/lcr.py
 
 The Circuit object will be responsible for all calculations
 
