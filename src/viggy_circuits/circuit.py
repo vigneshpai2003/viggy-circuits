@@ -200,9 +200,9 @@ class Circuit:
         return equations
 
     @staticmethod
-    def __derivatives(t: float, x: List[float], wires: List[Wire], indices: Dict[Wire, int],
+    def __derivatives(t: float, x: np.ndarray, wires: List[Wire], indices: Dict[Wire, int],
                       firstLawEquations: Set[WireCollection],
-                      secondLawEquations: Set[WireCollection]) -> List[float]:
+                      secondLawEquations: Set[WireCollection]) -> np.ndarray:
         """
         :param t: time
         :param x: a list of charge and current values
@@ -258,11 +258,14 @@ class Circuit:
 
         derivatives = linalg.solve(R, V)
 
-        dx_dt = []
+        dx_dt = np.zeros_like(x)
+
         for wire in wires:
             if wire.isLCR:
-                dx_dt.append(x[indices[wire] + 1])
-            dx_dt.append(derivatives[wires.index(wire)])
+                dx_dt[indices[wire]] = x[indices[wire] + 1]  # i is already in input
+                dx_dt[indices[wire] + 1] = derivatives[wires.index(wire)]  # di_dt
+            else:
+                dx_dt[indices[wire]] = derivatives[wires.index(wire)]  # i
 
         return dx_dt
 
