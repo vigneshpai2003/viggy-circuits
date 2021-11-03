@@ -1,7 +1,7 @@
 """
 <<<THIS FILE SHOWS AN EXAMPLE OF HOW TO FIND EFFECTIVE RESISTANCE OF A CIRCUIT>>>
 """
-from Circuits.circuit import *
+from viggy_circuits.circuit import *
 
 circuit = Circuit()
 

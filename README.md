@@ -1,14 +1,21 @@
-# Circuits
+# viggy-circuits
 
 This module simulates arbitrarily large electric circuits and provides the 
 solution (i.e. current) in each wire of the circuit.
 
-### Dependencies
+### Installation
 
-``numpy``, ``scipy.linalg``, ``scipy.integrate``
+`git clone https://github.com/vigneshpai2003/viggy-circuits.git`
 
-###Note: The following tutorial is based on an older version
+`cd viggy-circuits`
+
+`pip install -r requirements.txt`
+
+`pip install .`
+
 ### Basic Tutorial
+######Note: The following tutorial is based on an older version (to be updated soon)
+###### For now go through samples/lcr.py
 
 The Circuit object will be responsible for all calculations
 
@@ -98,4 +105,4 @@ plt.legend(['q', 'i', 'di/dt'])
 plt.grid(True)
 plt.show()
 ```
-![Matplotlib plot](https://github.com/vigneshpai2003/Circuits/blob/master/plots/plot1.png?raw=True)
+![Matplotlib plot](https://github.com/vigneshpai2003/viggy-circuits/blob/master/plots/plot1.png?raw=True)

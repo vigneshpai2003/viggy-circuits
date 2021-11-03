@@ -1,7 +1,7 @@
 """
 <<<THIS FILE SHOWS AN EXAMPLE OF HOW TO SIMULATE AN LCR CIRCUIT>>>
 """
-from Circuits import *
+from viggy_circuits import *
 from matplotlib import pyplot as plt
 
 circuit = Circuit()
@@ -46,7 +46,7 @@ time = solution[wires[2]][0]
 q, i, di_dt = list(zip(*solution[wires[2]][1]))
 
 # plot solution using matplotlib
-plt.figure(num="Electric Circuits")
+plt.figure(num="viggy-circuits")
 plt.title("LCR Circuit")
 plt.xlabel("time (s)")
 plt.xticks(range(end + 1))

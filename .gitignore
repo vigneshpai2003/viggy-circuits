@@ -1,2 +1,4 @@
-.idea
-__pycache__
+/.idea/
+/__pycache__/
+/venv/
+/src/viggy_circuits.egg-info/
