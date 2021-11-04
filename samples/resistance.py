@@ -35,5 +35,3 @@ circuit.connect(junctionB, wireAB, wireDB, wireBC)
 circuit.connect(junctionC, wireAC, wireDC, wireBC)
 
 solution = circuit.solve(end=1, dt=1)
-
-print(solution[battery])

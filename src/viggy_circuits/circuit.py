@@ -8,6 +8,7 @@ from scipy import linalg, integrate
 
 from .error import CircuitError
 from .wireCollection import WireCollection, Direction
+from .solution import Solution
 
 from typing import TYPE_CHECKING, FrozenSet
 
@@ -200,14 +201,14 @@ class Circuit:
         return equations
 
     @staticmethod
-    def __derivatives(t: float, x: np.ndarray, wires: List[Wire], indices: Dict[Wire, int],
+    def __derivatives(t: float, x: np.ndarray, wires: List[Wire], wireToIndex: Dict[Wire, int],
                       firstLawEquations: Set[WireCollection],
                       secondLawEquations: Set[WireCollection]) -> np.ndarray:
         """
         :param t: time
         :param x: a list of charge and current values
         :param wires: the list of wires corresponding to each value in x
-        :param indices: the index of the charge / current value in x for each wire
+        :param wireToIndex: the index of the charge / current value in x for each wire
 
         x[indices[wire]] gives charge
         x[indices[wire] + 1] gives current (only applicable for LCR)
@@ -227,7 +228,7 @@ class Circuit:
             for wire in equation.wires:
                 sign = equation.getSign(wire)
                 if wire.isLCR and not allLCR:
-                    V[i] -= sign * x[indices[wire] + 1]
+                    V[i] -= sign * x[wireToIndex[wire] + 1]
                 else:
                     R[i, wires.index(wire)] = sign
 
@@ -242,7 +243,7 @@ class Circuit:
                     R[i, wires.index(wire)] = sign * wire.device.inductance(t)
 
                     # calculate potential drop due to resistor
-                    V[i] -= sign * wire.device.resistance(t) * x[indices[wire] + 1]
+                    V[i] -= sign * wire.device.resistance(t) * x[wireToIndex[wire] + 1]
                 else:
                     R[i, wires.index(wire)] = sign * wire.device.resistance(t)
 
@@ -252,7 +253,7 @@ class Circuit:
 
                 # potential drop due to capacitor
                 if wire.device.capacitance is not None:
-                    V[i] -= sign * x[indices[wire]] / wire.device.capacitance(t)
+                    V[i] -= sign * x[wireToIndex[wire]] / wire.device.capacitance(t)
 
             i += 1
 
@@ -262,109 +263,54 @@ class Circuit:
 
         for wire in wires:
             if wire.isLCR:
-                dx_dt[indices[wire]] = x[indices[wire] + 1]  # i is already in input
-                dx_dt[indices[wire] + 1] = derivatives[wires.index(wire)]  # di_dt
+                dx_dt[wireToIndex[wire]] = x[wireToIndex[wire] + 1]  # i is already in input
+                dx_dt[wireToIndex[wire] + 1] = derivatives[wires.index(wire)]  # di_dt
             else:
-                dx_dt[indices[wire]] = derivatives[wires.index(wire)]  # i
+                dx_dt[wireToIndex[wire]] = derivatives[wires.index(wire)]  # i
 
         return dx_dt
 
-    @staticmethod
-    def __indexMap(wires: List[Wire]) -> Dict[Wire, int]:
-        # map each wire to index of corresponding value in initConditions
-        indexMap = {}
-
-        i = 0
-        for wire in wires:
-            indexMap[wire] = i
-            i += 1
-            if wire.isLCR:  # LCR wires have two corresponding values
-                i += 1
-
-        return indexMap
-
-    def solve(self, end: float, dt: float) -> Dict[Wire, Tuple[List[float], List[List[float]]]]:
-        # empty initialization of solution dictionary
-        solution = dict()
-        for wire in self.__wires:
-            solution[wire] = ([], [])
-
-        # calculate effective wires and junctions
-        self.__simplifyCircuit()
-        degree = len(self.__effectiveWires)
-        wires = random.sample(list(self.__effectiveWires), degree)
-
-        # set initial conditions of simulation
-        initConditions = []
-        for wire in wires:
-            initConditions.append(wire.device.initCharge)
-            if wire.isLCR:
-                initConditions.append(wire.device.initCurrent)
+    def solve(self, end: float, dt: float) -> Solution:
+        solution = Solution(self.__wires)
 
         for (start, stop), events in self.__getIntervals(end):
-            indexMap = Circuit.__indexMap(wires)
+            # calculate effective wires and junctions
+            self.__simplifyCircuit()
+            degree = len(self.__effectiveWires)
+            wires = random.sample(list(self.__effectiveWires), degree)
+
+            # set initial conditions of simulation
+            initConditions = solution.lastKnownValues(wires)
+            indexOf = solution.mapWireToIndex(wires)
 
             # calculate firstLaw and secondLaw
             firstLaw = self.__firstLawWires()
             secondLaw = self.__secondLawWires(limit=degree - len(firstLaw))
 
             # method: Nonstiff = ('RK45', 'RK23', 'DOP853'); Stiff = ('Radau', 'BDF'); Universal = 'LSODA'
-            integrated_sol = integrate.solve_ivp(fun=Circuit.__derivatives, y0=initConditions,
-                                                 t_span=(start, stop), t_eval=np.arange(start, stop, dt),
-                                                 args=(wires, indexMap, firstLaw, secondLaw))
+            integral = integrate.solve_ivp(fun=Circuit.__derivatives, y0=initConditions,
+                                           t_span=(start, stop), t_eval=np.arange(start, stop, dt),
+                                           args=(wires, indexOf, firstLaw, secondLaw))
 
             # update solution
-            for t_index in range(len(integrated_sol.t)):
-                time = integrated_sol.t[t_index]
+            for i in range(len(integral.t)):
+                t = integral.t[i]
+                x = integral.y[:, i]
 
-                x = integrated_sol.y[:, t_index]
-
-                derivatives = self.__derivatives(time, x, wires, indexMap, firstLaw, secondLaw)
+                derivatives = self.__derivatives(t, x, wires, indexOf, firstLaw, secondLaw)
 
                 # add all values to solution
                 for wire in wires:
-                    time_list, q_list = solution[wire]
-                    time_list.append(time)
-                    q = integrated_sol.y[indexMap[wire], t_index]
+                    solution[wire].update(t, q=x[indexOf[wire]],
+                                          i=derivatives[indexOf[wire]],
+                                          di_dt=derivatives[indexOf[wire] + 1] if wire.isLCR else None)
 
-                    if wire.isLCR:
-                        i = integrated_sol.y[indexMap[wire] + 1, t_index]
-                        di_dt = derivatives[indexMap[wire] + 1]
-                        q_list.append((q, i, di_dt))
-                    else:
-                        i = derivatives[indexMap[wire]]
-                        q_list.append((q, i))
-
-                # current and its derivative is 0 for void_wires, charge is init_charge or last known value
                 for wire in self.__voidWires:
-                    time_list, q_list = solution[wire]
-                    time_list.append(time)
-
-                    if len(q_list) == 0:
-                        charge = wire.device.initCharge
-                    else:
-                        charge = q_list[-1][0]
-
-                    if wire.isLCR:
-                        q_list.append((charge, 0.0, 0.0))
-                    else:
-                        q_list.append((charge, 0.0))
+                    solution[wire].updateVoid(t)
 
             # call event functions
             for func, args, kwargs in events:
                 func(*args, **kwargs)
-
-            if not stop == end:  # if this is not the last iteration
-                # simplify circuit again
-                self.__simplifyCircuit()
-                degree = len(self.__effectiveWires)
-                wires = random.sample(list(self.__effectiveWires), degree)
-
-                # set initConditions to the last known values
-                initConditions = []
-                for wire in wires:
-                    time_list, q_list = solution[wire]
-                    initConditions.extend(q_list[-1][:-1])
 
         return solution
 
@@ -385,8 +331,8 @@ class Circuit:
 
     def __getIntervals(self, end: float) -> List[Tuple[Tuple[float, float], List[Tuple[Callable, Any, Any]]]]:
         """
-        event = {t0 = [events, ...], t1 = [events, ...], ...};
-        splits time interval into smaller intervals separated by event execution;
+        splits time from 0 to end into smaller intervals separated by event execution
+        :return: List[( (start, stop), List[(func, args, kwargs)] )]
         """
         if len(self.__events) == 0:
             return [((0.0, end), [])]

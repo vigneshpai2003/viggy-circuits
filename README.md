@@ -74,20 +74,16 @@ The solution may be calculated till the end time with given time step:
 solution = circuit.solve(end=20, dt=0.03)
 ```
 
-The solution is a dictionary with the keys being the wire,
-the value is a tuple of two lists.
-
-The first list is a list of time values at which the solution was evaluated.
-The second list is a list of <img src="https://render.githubusercontent.com/render/math?math=(q, i, \frac{di}{dt})"> tuples,
-note that in case inductance was not given for wire,
-it would be a list of <img src="https://render.githubusercontent.com/render/math?math=(q, i)"> tuples.
-
-We can extract the values into individual values using the `zip` function:
+The solution of a specific wire can be accessed as if solution is a dictionary,
+the solution for a wire can be unpacked to give arrays of some quantities.
 
 ```
-time = solution[wire][0]
-q, i, di_dt = list(zip(*solution[wire][1]))
+wireSolution = solution[wire]
+
+t, q, i, di_dt = wireSolution
 ```
+
+Note: if `wire` does not have inductor, there would not be `di_dt` in solution
 
 ### Visualization of Solution
 ```
@@ -98,9 +94,9 @@ plt.title("LCR Circuit")
 plt.xlabel("time (s)")
 plt.xticks(range(end + 1))
 
-plt.plot(time, q)
-plt.plot(time, i)
-plt.plot(time, di_dt)
+plt.plot(t, q)
+plt.plot(t, i)
+plt.plot(t, di_dt)
 
 plt.legend(['q', 'i', 'di/dt'])
 plt.grid(True)
