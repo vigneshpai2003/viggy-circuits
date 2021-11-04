@@ -68,22 +68,13 @@ Note:
 
 ### Solving and Analysis of Solution
 
-The solution may be calculated till the end time with given time step:
+The solution may be calculated till the end time with given time step,
+the solution of a specific wire can be accessed as if solution is a dictionary
 
 ```
-solution = circuit.solve(end=20, dt=0.03)
-```
-
-The solution of a specific wire can be accessed as if solution is a dictionary,
-the solution for a wire can be unpacked to give arrays of some quantities.
-
-```
+solution = circuit.solve(end=20, dt=0.01)
 wireSolution = solution[wire]
-
-t, q, i, di_dt = wireSolution
 ```
-
-Note: if `wire` does not have inductor, there would not be `di_dt` in solution
 
 ### Visualization of Solution
 ```
@@ -94,12 +85,17 @@ plt.title("LCR Circuit")
 plt.xlabel("time (s)")
 plt.xticks(range(end + 1))
 
-plt.plot(t, q)
-plt.plot(t, i)
-plt.plot(t, di_dt)
+plt.plot(wireSolution.t, wireSolution.q)  # charge
+plt.plot(wireSolution.t, wireSolution.i)  # current
+plt.plot(wireSolution.t, wireSolution.di_dt)  # current gradient
+plt.plot(wireSolution.t, wireSolution.v)  # potential drop
+plt.plot(wireSolution.t, wireSolution.powerR)  # power dissipated across Resistor
+plt.plot(wireSolution.t, wireSolution.energyC)  # energy in capacitor
+plt.plot(wireSolution.t, wireSolution.energyL)  # energy in inductor
 
-plt.legend(['q', 'i', 'di/dt'])
+plt.legend(['$q$', '$i$', r'$\frac{di}{dt}$', '$V$', '$P_R$', '$U_C$', '$U_L$'])
 plt.grid(True)
 plt.show()
+
 ```
-![Matplotlib plot](https://github.com/vigneshpai2003/viggy-circuits/blob/master/plots/plot1.png?raw=True)
+![plot](https://github.com/vigneshpai2003/viggy-circuits/blob/master/plots/plot2.png?raw=True)

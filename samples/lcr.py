@@ -2,6 +2,8 @@
 <<<THIS FILE SHOWS AN EXAMPLE OF HOW TO SIMULATE AN LCR CIRCUIT>>>
 """
 from viggy_circuits import *
+
+from math import sin
 from matplotlib import pyplot as plt
 
 circuit = Circuit()
@@ -41,8 +43,7 @@ circuit.addEvent(time=8.0, event=toggle, args=(2,))
 
 end = 20
 solution = circuit.solve(end=end, dt=0.01)
-
-time, q, i, di_dt = solution[wires[2]]
+wireSolution = solution[wires[2]]
 
 # plot solution using matplotlib
 plt.figure(num="viggy-circuits")
@@ -50,10 +51,14 @@ plt.title("LCR Circuit")
 plt.xlabel("time (s)")
 plt.xticks(range(end + 1))
 
-plt.plot(time, q)
-plt.plot(time, i)
-plt.plot(time, di_dt)
+plt.plot(wireSolution.t, wireSolution.q)  # charge
+plt.plot(wireSolution.t, wireSolution.i)  # current
+plt.plot(wireSolution.t, wireSolution.di_dt)  # current gradient
+plt.plot(wireSolution.t, wireSolution.v)  # potential drop
+plt.plot(wireSolution.t, wireSolution.powerR)  # power dissipated across Resistor
+plt.plot(wireSolution.t, wireSolution.energyC)  # energy in capacitor
+plt.plot(wireSolution.t, wireSolution.energyL)  # energy in inductor
 
-plt.legend(['q', 'i', 'di/dt'])
+plt.legend(['$q$', '$i$', r'$\frac{di}{dt}$', '$V$', '$P_R$', '$U_C$', '$U_L$'])
 plt.grid(True)
 plt.show()

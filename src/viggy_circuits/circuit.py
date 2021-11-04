@@ -312,6 +312,8 @@ class Circuit:
             for func, args, kwargs in events:
                 func(*args, **kwargs)
 
+        solution.freeze()
+
         return solution
 
     def addEvent(self, time: float, event: Callable, args=None, kwargs=None):

@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from math import sin, sqrt, tau
+import numpy as np
+from math import tau
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
@@ -16,6 +17,6 @@ def generatorAC(emf: float, f: float, phi: float) -> Callable[[float], float]:
     """
 
     def _AC(t: float) -> float:
-        return sqrt(2) * emf * sin(tau * f * t + phi)
+        return np.sqrt(2) * emf * np.sin(tau * f * t + phi)
 
     return _AC
