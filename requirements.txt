@@ -7,4 +7,3 @@ pyparsing==3.0.4
 python-dateutil==2.8.2
 scipy==1.7.1
 six==1.16.0
--e git+https://github.com/vigneshpai2003/viggy-circuits.git@45c3d1efab7f86ef78dbf2f1b5fda588ebae5c92#egg=viggy_circuits

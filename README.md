@@ -13,9 +13,9 @@ solution (i.e. current) in each wire of the circuit.
 
 `pip install .`
 
+Try running any of the example in samples folder
+
 ### Basic Tutorial
-#### Note: The following tutorial is based on an older version (to be updated soon),
-#### For now go through samples/lcr.py
 
 The Circuit object will be responsible for all calculations
 
@@ -36,7 +36,7 @@ Resistance is mandatory while the rest are optional,
 there must be a battery in at least one wire in the circuit.
 
 In case capacitance or inductance is given,
-`init_charge` and `init_current` respectively may also be given,
+`initCharge` and `initCurrent` respectively may also be given,
 by default they are `0.0`.
 
 Example:
@@ -55,7 +55,7 @@ junction = Junction()
 The connection is made using the circuit object
 
 ```
-circuit.connect(junction, {wire1, wire2, wire3})
+circuit.connect(junction, wire1, wire2, wire3)
 ```
 
 Note:
@@ -79,7 +79,8 @@ the value is a tuple of two lists.
 
 The first list is a list of time values at which the solution was evaluated.
 The second list is a list of <img src="https://render.githubusercontent.com/render/math?math=(q, i, \frac{di}{dt})"> tuples,
-note that in case inductance was not given for wire, it would be a list of <img src="https://render.githubusercontent.com/render/math?math=(q, i)"> tuples.
+note that in case inductance was not given for wire,
+it would be a list of <img src="https://render.githubusercontent.com/render/math?math=(q, i)"> tuples.
 
 We can extract the values into individual values using the `zip` function:
 
@@ -92,7 +93,7 @@ q, i, di_dt = list(zip(*solution[wire][1]))
 ```
 from matplotlib import pyplot as plt
 
-plt.figure(num="Electric Circuits")
+plt.figure(num="viggy-circuits")
 plt.title("LCR Circuit")
 plt.xlabel("time (s)")
 plt.xticks(range(end + 1))

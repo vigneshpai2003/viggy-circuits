@@ -1,7 +1,7 @@
 """
 <<<THIS FILE SHOWS AN EXAMPLE OF HOW TO FIND EFFECTIVE RESISTANCE OF A CIRCUIT>>>
 """
-from viggy_circuits.circuit import *
+from viggy_circuits import *
 
 circuit = Circuit()
 
@@ -29,10 +29,10 @@ junctionC = Junction()
 junctionD = Junction()
 
 # make the connections
-circuit.connect(junctionA, {battery, wireAB, wireAC})
-circuit.connect(junctionD, {battery, wireDB, wireDC})
-circuit.connect(junctionB, {wireAB, wireDB, wireBC})
-circuit.connect(junctionC, {wireAC, wireDC, wireBC})
+circuit.connect(junctionA, battery, wireAB, wireAC)
+circuit.connect(junctionD, battery, wireDB, wireDC)
+circuit.connect(junctionB, wireAB, wireDB, wireBC)
+circuit.connect(junctionC, wireAC, wireDC, wireBC)
 
 solution = circuit.solve(end=1, dt=1)
 
