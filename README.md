@@ -5,13 +5,13 @@ solution (i.e. current) in each wire of the circuit.
 
 ### Installation
 
-`git clone https://github.com/vigneshpai2003/viggy-circuits.git`
+`> git clone https://github.com/vigneshpai2003/viggy-circuits.git`
 
-`cd viggy-circuits`
+`> cd viggy-circuits`
 
-`pip install -r requirements.txt`
+`> pip install -r requirements.txt`
 
-`pip install .`
+`> pip install .`
 
 Try running any of the example in samples folder
 
