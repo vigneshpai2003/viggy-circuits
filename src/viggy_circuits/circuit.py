@@ -10,10 +10,10 @@ from .error import CircuitError
 from .wireCollection import WireCollection, Direction
 from .solution import Solution
 
-from typing import TYPE_CHECKING, FrozenSet
+from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from typing import Set, List, Dict, Tuple, Callable, Any, Any
+    from typing import Set, List, Dict, Tuple, Callable, Any, FrozenSet
 
     from .wire import Wire
     from .junction import Junction
@@ -321,6 +321,9 @@ class Circuit:
         when solving, the event is called using args and kwargs at specified time;
         multiple events are allowed at same time, but add_event must be called multiple times;
         """
+        if time < 0:
+            raise ValueError(f"time must be non-negative, cannot be {time}")
+
         if args is None:
             args = tuple()
         if kwargs is None:
@@ -350,3 +353,23 @@ class Circuit:
         intervals.append(((times[-1], end), []))
 
         return intervals
+
+    def initialCurrents(self) -> Dict[Wire, float]:
+        """
+        :return: a dictionary mapping each wire to current flowing in it
+        """
+        # calculate effective wires and junctions
+        self.__simplifyCircuit()
+        degree = len(self.__effectiveWires)
+        wires = random.sample(list(self.__effectiveWires), degree)
+
+        x = Solution.initialValues(wires)
+        indexOf = Solution.mapWireToIndex(wires)
+
+        # calculate firstLaw and secondLaw
+        firstLaw = self.__firstLawWires()
+        secondLaw = self.__secondLawWires(limit=degree - len(firstLaw))
+
+        dx_dt = self.__derivatives(0, x, wires, indexOf, firstLaw, secondLaw)
+
+        return dict([(wire, dx_dt[indexOf[wire]]) for wire in wires])

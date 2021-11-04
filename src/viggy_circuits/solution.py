@@ -87,6 +87,16 @@ class Solution:
         return last
 
     @staticmethod
+    def initialValues(wires: List[Wire]):
+        x = []
+        for wire in wires:
+            x.append(wire.device.initCharge)
+            if wire.isLCR:
+                x.append(wire.device.initCurrent)
+
+        return x
+
+    @staticmethod
     def mapWireToIndex(wires: List[Wire]):
         # map each wire to index of corresponding value in lastKnownValues
         indexMap = {}

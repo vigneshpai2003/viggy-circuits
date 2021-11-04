@@ -34,7 +34,7 @@ class Device:
         else:
             return lambda t: x
 
-    def potentialDrop(self, t: float, q=0.0, dq_dt=0.0, d2q_dt2=0.0):
+    def potentialDrop(self, t: float, q=0.0, i=0.0, di_dt=0.0):
 
         v = 0.0
 
@@ -42,12 +42,12 @@ class Device:
             v += self.battery(t)
 
         if self.resistance is not None:
-            v -= dq_dt * self.resistance(t)
+            v -= i * self.resistance(t)
 
         if self.capacitance is not None:
             v -= q / self.capacitance(t)
 
         if self.inductance is not None:
-            v -= d2q_dt2 * self.inductance(t)
+            v -= di_dt * self.inductance(t)
 
         return v
