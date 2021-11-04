@@ -42,7 +42,7 @@ circuit.addEvent(time=8.0, event=toggle, args=(2,))
 end = 20
 solution = circuit.solve(end=end, dt=0.01)
 
-t, q, i, di_dt = solution[wires[2]]
+time, q, i, di_dt = solution[wires[2]]
 
 # plot solution using matplotlib
 plt.figure(num="viggy-circuits")
@@ -50,9 +50,9 @@ plt.title("LCR Circuit")
 plt.xlabel("time (s)")
 plt.xticks(range(end + 1))
 
-plt.plot(t, q)
-plt.plot(t, i)
-plt.plot(t, di_dt)
+plt.plot(time, q)
+plt.plot(time, i)
+plt.plot(time, di_dt)
 
 plt.legend(['q', 'i', 'di/dt'])
 plt.grid(True)

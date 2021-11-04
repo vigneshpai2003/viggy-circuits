@@ -334,10 +334,11 @@ class Circuit:
         splits time from 0 to end into smaller intervals separated by event execution
         :return: List[( (start, stop), List[(func, args, kwargs)] )]
         """
-        if len(self.__events) == 0:
-            return [((0.0, end), [])]
-
         times = sorted([i for i in list(self.__events.keys()) if i <= end])
+
+        if len(times) == 0:
+            return [((0, end), [])]
+
         intervals = []
         old = 0.0
         for i in range(len(times)):
