@@ -13,7 +13,7 @@ from .solution import Solution
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from typing import Set, List, Dict, Tuple, Callable, Any, FrozenSet
+    from typing import Set, List, Dict, Tuple, Callable, Any
 
     from .wire import Wire
     from .junction import Junction
@@ -78,7 +78,7 @@ class Circuit:
         self.__effectiveWires = self.__wires - self.__voidWires
         self.__effectiveJunctions = self.__junctions - self.__voidJunctions
 
-    def __getCyclesWith(self, wire: Wire) -> List[WireCollection]:
+    def __getAllCyclesWith(self, wire: Wire) -> List[WireCollection]:
         """
         this function should be called after simplifying circuit
         :param wire: should be in self.__effectiveWires
@@ -128,66 +128,99 @@ class Circuit:
 
         return cycles
 
+    def __getSomeCycleWith(self, wire: Wire) -> WireCollection:
+        """
+        this function should be called after simplifying circuit
+        :param wire: should be in self.__effectiveWires
+        :return: some cycle containing the wire
+        """
+        endpoint = wire.junction1
+
+        def cyclePropagate(currentJunction: Junction, currentWire: Wire,
+                           cyclePath: WireCollection, parsedJunctions: Set[Junction]):
+
+            for newWire in currentJunction.otherWires(currentWire) - self.__voidWires:
+                """
+                for every wire in the junction, an attempt is made to add it to cyclePath
+                if failed, the entire cycle path corresponding up to that point is discarded
+                """
+                # direction is assumed to be from junction1 to junction2 always
+                if currentJunction is newWire.junction1:
+                    sign = Direction.FORWARD
+                elif currentJunction is newWire.junction2:
+                    sign = Direction.BACKWARD
+                else:
+                    raise CircuitError("sign of wire could not be deduced")
+
+                # newCyclePath must be copied and not referenced
+                newCyclePath = copy.copy(cyclePath)
+                newCyclePath.append(newWire, sign)
+
+                newJunction = newWire.otherJunction(currentJunction)
+
+                if newJunction is endpoint:  # if cycle is found
+                    return newCyclePath
+
+                elif newJunction in parsedJunctions:  # if junction was already encountered before
+                    continue
+
+                cycle = cyclePropagate(newJunction, newWire, newCyclePath, parsedJunctions.union({newJunction}))
+
+                if cycle is not None:
+                    return cycle
+
+            # if no cycle was found
+            return None
+
+        return cyclePropagate(currentJunction=wire.junction2, currentWire=wire,
+                              cyclePath=WireCollection((wire, Direction.FORWARD)), parsedJunctions={wire.junction2})
+
     def __firstLawEquations(self) -> Set[WireCollection]:
         """
+        if there are n Junctions, the sum of the equations formed by them is 0 (linearly dependent)
+        this is because each wire shows up twice but with different sign each time
+        It can also be proved that any n-1 Junction equations are linearly independent
         :return: the wires to be used in implementation of Kirchhoff's First Law
         """
         equations: Set[WireCollection] = set()
 
-        # possibleEquations is updated to include all possible combinations of already formed equations
-        possibleEquations: Set[FrozenSet[Wire]] = set()
+        junctionIter = iter(self.__effectiveJunctions)
+        next(junctionIter)  # we dont need one junction
 
-        for junction in self.__effectiveJunctions:
-            # remove wires that are void
-            junctionWires = junction.wires - self.__voidWires
+        while True:
+            try:
+                junction = next(junctionIter)
+                junctionWires = junction.wires - self.__voidWires
 
-            """
-            in case all are LCR wires then all will be used in writing first law equation with di_dt
-            in case only some are LCR, we already know their i values and hence they are not variables
-            """
-            allLCR = all([wire.isLCR for wire in junctionWires])
-            newEquation = frozenset(wire for wire in junctionWires if not wire.isLCR or allLCR)
+                """
+                in case all are LCR wires then all will be used in writing first law equation with di_dt
+                in case only some are LCR, we already know their i values and hence they are not variables
+                """
+                allLCR = all([wire.isLCR for wire in junctionWires])
+                equations.add(
+                    WireCollection(*[(wire, Direction.FORWARD if junction is wire.junction1 else Direction.BACKWARD)
+                                     for wire in junctionWires if not wire.isLCR or allLCR]))
 
-            # check if these wire can be derived from existing wire equations
-            if newEquation in possibleEquations:
-                continue
+            except StopIteration:
+                return equations
 
-            """
-            suppose two equations have a variable in common
-            another equation can be created by adding them
-            this new equation will not contain variables common to both equations
-            However if the equations have nothing in common we need not consider them
-            """
-            # update possible equations
-            possibleEquations.update(set(equation.symmetric_difference(newEquation) for equation in possibleEquations))
-            possibleEquations.add(newEquation)
-
-            # create a WireCollection to store the sign of wire as well
-            equation = WireCollection()
-            for wire in junctionWires:
-                equation.append(wire, Direction.FORWARD if junction is wire.junction1 else Direction.BACKWARD)
-
-            equations.add(equation)
-
-        return equations
-
-    def __secondLawEquations(self, limit=None) -> Set[WireCollection]:
+    def __secondLawEquations(self) -> Set[WireCollection]:
         """
-        :param limit: the number of equations needed
-        return the wires to be used in implementation of Kirchhoff's Second Law;
+        :return: the wires to be used in implementation of Kirchhoff's Second Law;
         """
         equations = set()
         parsedWires = set()
 
         for wire in self.__effectiveWires:
-            for cycle in self.__getCyclesWith(wire):
+            for cycle in self.__getAllCyclesWith(wire):
                 if set(cycle.wires).issubset(parsedWires):  # if equation in these variablles is already formed
                     continue
 
                 parsedWires.update(set(cycle.wires))
                 equations.add(cycle)
 
-                if len(equations) == limit:  # if limit is reached no need to do further iterations
+                # number of first law equations is len(junctions) - 1, total equations is len(wires)
+                if len(equations) == len(self.__effectiveWires) - len(self.__effectiveJunctions) + 1:
                     return equations
 
         return equations
@@ -277,7 +310,7 @@ class Circuit:
 
             # calculate firstLaw and secondLaw
             firstLaw = self.__firstLawEquations()
-            secondLaw = self.__secondLawEquations(limit=degree - len(firstLaw))
+            secondLaw = self.__secondLawEquations()
 
             # method: Nonstiff = ('RK45', 'RK23', 'DOP853'); Stiff = ('Radau', 'BDF'); Universal = 'LSODA'
             integral = integrate.solve_ivp(fun=Circuit.__derivatives, y0=initConditions,
@@ -360,7 +393,7 @@ class Circuit:
 
         # calculate firstLaw and secondLaw
         firstLaw = self.__firstLawEquations()
-        secondLaw = self.__secondLawEquations(limit=degree - len(firstLaw))
+        secondLaw = self.__secondLawEquations()
 
         dx_dt = self.__derivatives(0, x, wires, indexOf, firstLaw, secondLaw)
 
