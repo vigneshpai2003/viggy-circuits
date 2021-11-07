@@ -25,9 +25,11 @@ def R(n):
     i = circuit.initialCurrents()[battery]
     V = battery.device.potentialDrop(t=0, i=i)
 
+    # circuit.showGraph()
+
     return abs(V / i)
 
 
 if __name__ == '__main__':
-    for i in range(3, 20):
+    for i in range(3, 100):
         print(f"R({i}) = {Fraction(R(i)).limit_denominator()}")

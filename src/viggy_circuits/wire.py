@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+from .wireCollection import Direction
 from .error import CircuitError
 from .switch import Switch
 from .junction import Junction
@@ -89,3 +90,6 @@ class Wire:
             return self.__junction1
         else:
             raise CircuitError(f"given Junction: {junction} is not connected to wire")
+
+    def sign(self, junction: Junction) -> Direction:
+        return Direction.FORWARD if junction is self.junction1 else Direction.BACKWARD

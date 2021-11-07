@@ -1,13 +1,13 @@
 from __future__ import annotations
 
-import copy
 import random
 
 import numpy as np
 from scipy import linalg, integrate
+import networkx as nx
+import matplotlib.pyplot as plt
 
-from .error import CircuitError
-from .wireCollection import WireCollection, Direction
+from .wireCollection import WireCollection
 from .solution import Solution
 
 from typing import TYPE_CHECKING
@@ -78,103 +78,6 @@ class Circuit:
         self.__effectiveWires = self.__wires - self.__voidWires
         self.__effectiveJunctions = self.__junctions - self.__voidJunctions
 
-    def __getAllCyclesWith(self, wire: Wire) -> List[WireCollection]:
-        """
-        this function should be called after simplifying circuit
-        :param wire: should be in self.__effectiveWires
-        :return: all the cycles containing the wire
-        """
-        cycles = []
-        endpoint = wire.junction1
-
-        def cyclePropagate(currentJunction: Junction, currentWire: Wire,
-                           cyclePath: WireCollection, parsedJunctions: Set[Junction]):
-            """
-            :param currentJunction: the junction up to which the path was calculated
-            :param currentWire: the wire up to which the path was calculated
-            :param cyclePath: the path of the cycle so far
-            :param parsedJunctions: the junctions that are already a part of the cycle
-            :return:
-            """
-            for newWire in currentJunction.otherWires(currentWire) - self.__voidWires:
-                """
-                for every wire in the junction, an attempt is made to add it to cyclePath
-                if failed, the entire cycle path corresponding up to that point is discarded
-                """
-                # direction is assumed to be from junction1 to junction2 always
-                if currentJunction is newWire.junction1:
-                    sign = Direction.FORWARD
-                elif currentJunction is newWire.junction2:
-                    sign = Direction.BACKWARD
-                else:
-                    raise CircuitError("sign of wire could not be deduced")
-
-                # newCyclePath must be copied and not referenced
-                newCyclePath = copy.copy(cyclePath)
-                newCyclePath.append(newWire, sign)
-
-                newJunction = newWire.otherJunction(currentJunction)
-
-                if newJunction is endpoint:  # if cycle is found
-                    cycles.append(newCyclePath)
-                    continue
-                elif newJunction in parsedJunctions:  # if junction was already encountered before
-                    continue
-
-                cyclePropagate(newJunction, newWire, newCyclePath, parsedJunctions.union({newJunction}))
-
-        cyclePropagate(currentJunction=wire.junction2, currentWire=wire,
-                       cyclePath=WireCollection((wire, Direction.FORWARD)), parsedJunctions={wire.junction2})
-
-        return cycles
-
-    def __getSomeCycleWith(self, wire: Wire) -> WireCollection:
-        """
-        this function should be called after simplifying circuit
-        :param wire: should be in self.__effectiveWires
-        :return: some cycle containing the wire
-        """
-        endpoint = wire.junction1
-
-        def cyclePropagate(currentJunction: Junction, currentWire: Wire,
-                           cyclePath: WireCollection, parsedJunctions: Set[Junction]):
-
-            for newWire in currentJunction.otherWires(currentWire) - self.__voidWires:
-                """
-                for every wire in the junction, an attempt is made to add it to cyclePath
-                if failed, the entire cycle path corresponding up to that point is discarded
-                """
-                # direction is assumed to be from junction1 to junction2 always
-                if currentJunction is newWire.junction1:
-                    sign = Direction.FORWARD
-                elif currentJunction is newWire.junction2:
-                    sign = Direction.BACKWARD
-                else:
-                    raise CircuitError("sign of wire could not be deduced")
-
-                # newCyclePath must be copied and not referenced
-                newCyclePath = copy.copy(cyclePath)
-                newCyclePath.append(newWire, sign)
-
-                newJunction = newWire.otherJunction(currentJunction)
-
-                if newJunction is endpoint:  # if cycle is found
-                    return newCyclePath
-
-                elif newJunction in parsedJunctions:  # if junction was already encountered before
-                    continue
-
-                cycle = cyclePropagate(newJunction, newWire, newCyclePath, parsedJunctions.union({newJunction}))
-
-                if cycle is not None:
-                    return cycle
-
-            # if no cycle was found
-            return None
-
-        return cyclePropagate(currentJunction=wire.junction2, currentWire=wire,
-                              cyclePath=WireCollection((wire, Direction.FORWARD)), parsedJunctions={wire.junction2})
-
     def __firstLawEquations(self) -> Set[WireCollection]:
         """
         if there are n Junctions, the sum of the equations formed by them is 0 (linearly dependent)
@@ -197,9 +100,8 @@ class Circuit:
                 in case only some are LCR, we already know their i values and hence they are not variables
                 """
                 allLCR = all([wire.isLCR for wire in junctionWires])
-                equations.add(
-                    WireCollection(*[(wire, Direction.FORWARD if junction is wire.junction1 else Direction.BACKWARD)
-                                     for wire in junctionWires if not wire.isLCR or allLCR]))
+                equations.add(WireCollection(*[(wire, wire.sign(junction))
+                                               for wire in junctionWires if not wire.isLCR or allLCR]))
 
             except StopIteration:
                 return equations
@@ -208,20 +110,46 @@ class Circuit:
         """
         :return: the wires to be used in implementation of Kirchhoff's Second Law;
         """
-        equations = set()
-        parsedWires = set()
+        # create a multi graph of effective circuit
+        graph = nx.MultiGraph()
 
         for wire in self.__effectiveWires:
-            for cycle in self.__getAllCyclesWith(wire):
-                if set(cycle.wires).issubset(parsedWires):  # if equation in these variablles is already formed
-                    continue
+            graph.add_edge(*wire.junctions, wire=wire)
 
-                parsedWires.update(set(cycle.wires))
-                equations.add(cycle)
+        """
+        cycle_basis algorithm only works on Graph and not MultiGraph
+        for the junctions in between which more that one wires are present, we take some one, say X
+        for the rest of the parallel wires, we can apply KVL between the parallel wire and X
+        """
+        pseudoGraph = nx.Graph(graph)
 
-                # number of first law equations is len(junctions) - 1, total equations is len(wires)
-                if len(equations) == len(self.__effectiveWires) - len(self.__effectiveJunctions) + 1:
-                    return equations
+        equations = set()
+        parsedParallelWires = set()
+
+        for cycle in nx.algorithms.cycle_basis(nx.Graph(graph)):
+            equation = WireCollection()  # equation corresponding to cycle
+            for i in range(-1, len(cycle) - 1):
+                junction1, junction2 = cycle[i], cycle[i + 1]
+                wire = pseudoGraph.edges[junction1, junction2]["wire"]
+                equation.append(wire, wire.sign(junction1))
+
+                # get all the parallel wires that havent already been parsed
+                parallelWires = set()
+
+                for d in graph.get_edge_data(junction1, junction2).values():
+                    parallelWire = d['wire']
+                    if parallelWire is not wire and parallelWire not in parsedParallelWires:
+                        parallelWires.add(parallelWire)
+
+                # add the KVL equations for the parallelWires
+                for parallelWire in parallelWires:
+                    equations.add(WireCollection((wire, wire.sign(junction1)),
+                                                 (parallelWire, parallelWire.sign(junction2))))
+
+                # mark these parallel wires as parsed
+                parsedParallelWires.update(parallelWires)
+
+            equations.add(equation)
 
         return equations
 
@@ -282,7 +210,10 @@ class Circuit:
 
             i += 1
 
-        derivatives = linalg.solve(R, V)
+        try:
+            derivatives = linalg.solve(R, V)
+        except linalg.LinAlgError:
+            print(firstLawEquations, secondLawEquations)
 
         dx_dt = np.zeros_like(x)
 
@@ -398,3 +329,13 @@ class Circuit:
         dx_dt = self.__derivatives(0, x, wires, indexOf, firstLaw, secondLaw)
 
         return dict([(wire, dx_dt[indexOf[wire]]) for wire in wires])
+
+    def showGraph(self):
+        self.__simplifyCircuit()
+        graph = nx.MultiGraph()
+
+        for wire in self.__effectiveWires:
+            graph.add_edge(*wire.junctions)
+
+        nx.draw(nx.convert_node_labels_to_integers(graph), with_labels=True, font_weight='bold')
+        plt.show()
