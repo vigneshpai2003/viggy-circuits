@@ -3,42 +3,48 @@
 """
 from viggy_circuits import *
 
-circuit = Circuit()
 
-# Wires of a wheatstone bridge
+def main():
+    circuit = Circuit()
 
-# first pair of arms
-wireAB = Wire(resistance=1)
-wireAC = Wire(resistance=4)
+    # Wires of a wheatstone bridge
 
-# second pair of arms
-wireDB = Wire(resistance=3)
-wireDC = Wire(resistance=12)
+    # first pair of arms
+    wireAB = Wire(resistance=1)
+    wireAC = Wire(resistance=4)
 
-# the galvanometer wire
-wireBC = Wire(resistance=4)
+    # second pair of arms
+    wireDB = Wire(resistance=3)
+    wireDC = Wire(resistance=12)
 
-junctionA = Junction()
-junctionB = Junction()
-junctionC = Junction()
-junctionD = Junction()
+    # the galvanometer wire
+    wireBC = Wire(resistance=4)
 
-# make the connections
-circuit.connect(junctionA, wireAB, wireAC)
-circuit.connect(junctionD, wireDB, wireDC)
-circuit.connect(junctionB, wireAB, wireDB, wireBC)
-circuit.connect(junctionC, wireAC, wireDC, wireBC)
+    junctionA = Junction()
+    junctionB = Junction()
+    junctionC = Junction()
+    junctionD = Junction()
 
-# a battery with some internal resistance is connected between A and D
-battery = Wire(resistance=1, battery=1)
+    # make the connections
+    circuit.connect(junctionA, junctionB, wireAB)
+    circuit.connect(junctionA, junctionC, wireAC)
+    circuit.connect(junctionD, junctionB, wireDB)
+    circuit.connect(junctionD, junctionC, wireDC)
+    circuit.connect(junctionB, junctionC, wireBC)
 
-circuit.connect(junctionA, battery)
-circuit.connect(junctionD, battery)
+    # a battery with some internal resistance is connected between A and D
+    battery = Wire(resistance=1, battery=1)
 
-# find the currents
-solution = circuit.initialCurrents()
+    circuit.connect(junctionA, junctionD, battery)
 
-i = solution[battery]
-V = battery.potentialDrop(i=i)
+    # find the currents
+    solution = circuit.initialCurrents()
 
-print(f"Resistance of wheatstone bridge is {abs(V / i)}")
+    i = solution[battery]
+    V = battery.potentialDrop(i=i)
+
+    print(f"Resistance of wheatstone bridge is {abs(V / i)}")
+
+
+if __name__ == '__main__':
+    main()

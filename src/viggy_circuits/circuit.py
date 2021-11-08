@@ -34,16 +34,14 @@ class Circuit:
 
         self.__events = {}
 
-    def connect(self, junction: Junction, *wires: Wire):
-        """
-        function that connects junction to wire and each wire to junction
-        """
-        self.__junctions.add(junction)
-        self.__wires.update(wires)
+    def connect(self, junction1: Junction, junction2: Junction, wire: Wire):
+        self.__wires.add(wire)
+        self.__junctions.update({junction1, junction2})
 
-        junction.connect(*wires)
-        for wire in wires:
-            wire.connect(junction)
+        junction1.connect(wire)
+        junction2.connect(wire)
+
+        wire.connect(junction1, junction2)
 
     def __simplifyCircuit(self):
         """
@@ -99,7 +97,7 @@ class Circuit:
                 in case only some are LCR, we already know their i values and hence they are not variables
                 """
                 allLCR = all([wire.isLCR for wire in junctionWires])
-                equations.append([(wire, wire.sign(junction)) for wire in junctionWires if not wire.isLCR or allLCR])
+                equations.append([(wire, wire.direction(junction)) for wire in junctionWires if not wire.isLCR or allLCR])
 
             except StopIteration:
                 return equations
@@ -108,41 +106,42 @@ class Circuit:
         """
         :return: the wires to be used in implementation of Kirchhoff's Second Law;
         """
-        # create a multi graph of effective circuit
-        graph = nx.MultiGraph()
+        # create a new sub effectiveGraph
+        effectiveGraph = nx.MultiGraph()
 
         for wire in self.__effectiveWires:
-            graph.add_edge(*wire.junctions, wire=wire)
+            effectiveGraph.add_edge(*wire.junctions, wire=wire)
 
         """
         cycle_basis algorithm only works on Graph and not MultiGraph
         for the junctions in between which more that one wires are present, we take some one, say X
         for the rest of the parallel wires, we can apply KVL between the parallel wire and X
         """
-        pseudoGraph = nx.Graph(graph)
+        # converting multigraph to graph
+        pseudoGraph = nx.Graph(effectiveGraph)
 
         equations: List[List[Tuple[Wire, Direction]]] = []
         parsedParallelWires: Set[Wire] = set()
 
-        for cycle in nx.algorithms.cycle_basis(nx.Graph(graph)):
+        for cycle in nx.algorithms.cycle_basis(pseudoGraph):
             equation = []  # equation corresponding to cycle
             for i in range(len(cycle)):
                 junction1, junction2 = cycle[i - 1], cycle[i]
                 wire = pseudoGraph.edges[junction1, junction2]["wire"]
-                equation.append((wire, wire.sign(junction1)))
+                equation.append((wire, wire.direction(junction1)))
 
                 # get all the parallel wires that havent already been parsed
                 parallelWires = set()
 
-                for d in graph.get_edge_data(junction1, junction2).values():
+                for d in effectiveGraph.get_edge_data(junction1, junction2).values():
                     parallelWire = d['wire']
                     if parallelWire is not wire and parallelWire not in parsedParallelWires:
                         parallelWires.add(parallelWire)
 
                 # add the KVL equations for the parallelWires
                 for parallelWire in parallelWires:
-                    equations.append([(wire, wire.sign(junction1)),
-                                      (parallelWire, parallelWire.sign(junction2))])
+                    equations.append([(wire, wire.direction(junction1)),
+                                      (parallelWire, parallelWire.direction(junction2))])
 
                 # mark these parallel wires as parsed
                 parsedParallelWires.update(parallelWires)

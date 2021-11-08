@@ -19,18 +19,8 @@ class Junction:
         """
         return len(self.wires) != 0
 
-    @property
-    def isUnused(self) -> bool:
-        return not self.isUsed
-
-    def connect(self, *wires: Wire):
+    def connect(self, wire: Wire):
         """
         not meant to be called by user, see Circuit.connect
         """
-        self.wires.update(set(wires))
-
-    def otherWires(self, *wires: Wire) -> Set[Wire]:
-        """
-        :returns wires other than given wires connected to this junction
-        """
-        return self.wires.difference(set(wires))
+        self.wires.add(wire)

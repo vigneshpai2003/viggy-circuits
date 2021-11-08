@@ -13,14 +13,14 @@ def R(n):
 
     # make the connections of the prism
     for j in range(n):
-        circuit.connect(polyA[j], polyAWires[j], polyAWires[j-1], ABWires[j])
-        circuit.connect(polyB[j], polyBWires[j], polyBWires[j-1], ABWires[j])
+        circuit.connect(polyA[j], polyA[j-1], polyAWires[j])
+        circuit.connect(polyB[j], polyB[j-1], polyBWires[j])
+        circuit.connect(polyA[j], polyB[j], ABWires[j])
 
     battery = Wire(resistance=1, battery=1)
 
     # connect battery to first two vertices of A
-    circuit.connect(polyA[0], battery)
-    circuit.connect(polyA[1], battery)
+    circuit.connect(polyA[0], polyA[1], battery)
 
     i = circuit.initialCurrents()[battery]
     V = battery.potentialDrop(i=i)
@@ -31,5 +31,5 @@ def R(n):
 
 
 if __name__ == '__main__':
-    for i in range(3, 100):
-        print(f"R({i}) = {Fraction(R(i)).limit_denominator()}")
+    for k in range(3, 100):
+        print(f"R({k}) = {Fraction(R(k)).limit_denominator()}")

@@ -66,33 +66,19 @@ class Wire:
         """
         return self.inductance is not None
 
-    def connect(self, junction: Junction):
+    def connect(self, junction1: Junction, junction2: Junction):
         """
         not meant to be called by user, see Circuit.connect
         """
-        if self.connectionComplete:
-            raise CircuitError(f"Cannot connect 3rd wire to {self}")
-
-        # connect to whichever junction is unused
-        if len(self.junction1.wires) == 0:
-            self.__junction1 = junction
-        elif len(self.junction2.wires) == 0:
-            self.__junction2 = junction
-
-    @property
-    def connectionComplete(self) -> bool:
-        """
-        :return: whether wire is connected to two junctions
-        """
-        return self.__junction1.isUsed and self.__junction2.isUsed
+        self.__junction1 = junction1
+        self.__junction2 = junction2
 
     @property
     def isNull(self) -> bool:
         """
         :return: true if either of the junctions has less than 2 wires or switch is open
         """
-        return any([self.switch.isOpen, not self.connectionComplete,
-                    len(self.junction1.wires) == 1, len(self.junction2.wires) == 1])
+        return any([self.switch.isOpen, len(self.junction1.wires) <= 1, len(self.junction2.wires) <= 1])
 
     def swapJunctions(self):
         """
@@ -100,15 +86,10 @@ class Wire:
         """
         self.__junction1, self.__junction2 = self.__junction2, self.__junction1
 
-    def otherJunction(self, junction: Junction) -> Junction:
-        if junction is self.__junction1:
-            return self.__junction2
-        elif junction is self.__junction2:
-            return self.__junction1
-        else:
-            raise CircuitError(f"given Junction: {junction} is not connected to wire")
-
-    def sign(self, junction: Junction) -> Direction:
+    def direction(self, junction: Junction) -> Direction:
+        """
+        :return: forward if junction is junction1 else backward
+        """
         return Direction.FORWARD if junction is self.junction1 else Direction.BACKWARD
 
     def potentialDrop(self, t=0.0, q=0.0, i=0.0, di_dt=0.0):

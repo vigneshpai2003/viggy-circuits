@@ -28,9 +28,10 @@ def main():
 
     junctions = [Junction(), Junction(), Junction()]
 
-    circuit.connect(junctions[0], wires[0], wires[2], wires[3])
-    circuit.connect(junctions[1], wires[0], wires[1])
-    circuit.connect(junctions[2], wires[1], wires[2], wires[3])
+    circuit.connect(junctions[0], junctions[1], wires[0])
+    circuit.connect(junctions[1], junctions[2], wires[1])
+    circuit.connect(junctions[0], junctions[2], wires[2])
+    circuit.connect(junctions[0], junctions[2], wires[3])
 
     def toggle(_index):
         # function that toggles the switch of the _index wire
