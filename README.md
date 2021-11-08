@@ -24,7 +24,7 @@ circuit = Circuit()
 ```
 
 #### Wire Object
-Wire objects may be created using Device which takes several arguments
+Wire objects take several arguments
 
 + `resistance`
 + `battery`
@@ -32,8 +32,8 @@ Wire objects may be created using Device which takes several arguments
 + `inductance`
 
 These arguments may be floats or functions of time that return floats.
-Resistance is mandatory while the rest are optional,
-there must be a battery in at least one wire in the circuit.
+Resistance is mandatory for ResistorWire.
+Inductance is mandatory for InductorWire.
 
 In case capacitance or inductance is given,
 `initCharge` and `initCurrent` respectively may also be given,
@@ -41,8 +41,8 @@ by default they are `0.0`.
 
 Example:
 ```
-wire = Wire(resistance = 1.0,
-            capacitance = lambda t: 3.0 + math.sin(t))
+wire = ResistorWire(resistance = 1.0,
+                    capacitance = lambda t: 3.0 + math.sin(t))
 ```
 
 #### Connecting Wires
@@ -61,10 +61,8 @@ circuit.connect(junction, wire1, wire2, wire3)
 Note:
 
 + Each wire is connected to exactly two junctions
-+ Each junction is connected to at least two wires
-+ In case either of the above rules are violated,
-  the simulation will ignore the violators and will not
-  consider them to be part of the circuit.
++ Each junction is connected to several wires
++ Note that if a junction has 0 or 1 wires, no current will flow through it
 
 ### Solving and Analysis of Solution
 

@@ -14,27 +14,27 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from typing import Set, List, Dict, Tuple, Callable, Any
 
-    from .wire import Wire, Direction
+    from .wire import some_wire, Direction
     from .junction import Junction
 
 
 class Circuit:
     def __init__(self):
         # all the wires and junctions in the circuit
-        self.__wires: Set[Wire] = set()
+        self.__wires: Set[some_wire] = set()
         self.__junctions: Set[Junction] = set()
 
         # all the wires and junctions that are required to simulate (changes every iteration)
-        self.__effectiveWires: Set[Wire] = set()
+        self.__effectiveWires: Set[some_wire] = set()
         self.__effectiveJunctions: Set[Junction] = set()
 
         # all the wires and junctions that do not contribite to circuit (changes every iteration)
-        self.__voidWires: Set[Wire] = set()
+        self.__voidWires: Set[some_wire] = set()
         self.__voidJunctions: Set[Junction] = set()
 
         self.__events = {}
 
-    def connect(self, junction1: Junction, junction2: Junction, wire: Wire):
+    def connect(self, junction1: Junction, junction2: Junction, wire: some_wire):
         self.__wires.add(wire)
         self.__junctions.update({junction1, junction2})
 
@@ -75,14 +75,14 @@ class Circuit:
         self.__effectiveWires = self.__wires - self.__voidWires
         self.__effectiveJunctions = self.__junctions - self.__voidJunctions
 
-    def __firstLawEquations(self) -> List[List[Tuple[Wire, Direction]]]:
+    def __firstLawEquations(self) -> List[List[Tuple[some_wire, Direction]]]:
         """
         if there are n Junctions, the sum of the equations formed by them is 0 (linearly dependent)
         this is because each wire shows up twice but with different sign each time
         It can also be proved that any n-1 Junction equations are linearly independent
         :return: the wires to be used in implementation of Kirchhoff's First Law
         """
-        equations: List[List[Tuple[Wire, Direction]]] = []
+        equations: List[List[Tuple[some_wire, Direction]]] = []
 
         junctionIter = iter(self.__effectiveJunctions)
         next(junctionIter)  # we dont need one junction
@@ -97,12 +97,13 @@ class Circuit:
                 in case only some are LCR, we already know their i values and hence they are not variables
                 """
                 allLCR = all([wire.isLCR for wire in junctionWires])
-                equations.append([(wire, wire.direction(junction)) for wire in junctionWires if not wire.isLCR or allLCR])
+                equations.append([(wire, wire.direction(junction)) for wire in junctionWires
+                                  if not wire.isLCR or allLCR])
 
             except StopIteration:
                 return equations
 
-    def __secondLawEquations(self) -> List[List[Tuple[Wire, Direction]]]:
+    def __secondLawEquations(self) -> List[List[Tuple[some_wire, Direction]]]:
         """
         :return: the wires to be used in implementation of Kirchhoff's Second Law;
         """
@@ -120,8 +121,8 @@ class Circuit:
         # converting multigraph to graph
         pseudoGraph = nx.Graph(effectiveGraph)
 
-        equations: List[List[Tuple[Wire, Direction]]] = []
-        parsedParallelWires: Set[Wire] = set()
+        equations: List[List[Tuple[some_wire, Direction]]] = []
+        parsedParallelWires: Set[some_wire] = set()
 
         for cycle in nx.algorithms.cycle_basis(pseudoGraph):
             equation = []  # equation corresponding to cycle
@@ -151,9 +152,9 @@ class Circuit:
         return equations
 
     @staticmethod
-    def __derivatives(t: float, x: np.ndarray, wires: OrderedDict, wireToIndex: Dict[Wire, int],
-                      firstLawEquations: List[List[Tuple[Wire, Direction]]],
-                      secondLawEquations: List[List[Tuple[Wire, Direction]]]) -> np.ndarray:
+    def __derivatives(t: float, x: np.ndarray, wires: OrderedDict, wireToIndex: Dict[some_wire, int],
+                      firstLawEquations: List[List[Tuple[some_wire, Direction]]],
+                      secondLawEquations: List[List[Tuple[some_wire, Direction]]]) -> np.ndarray:
         """
         :param t: time
         :param x: a list of charge and current values
@@ -189,8 +190,9 @@ class Circuit:
                 if wire.isLCR:
                     R[i, wires[wire]] = sign * wire.inductance(t)
 
-                    # calculate potential drop due to resistor
-                    V[i] -= sign * wire.resistance(t) * x[wireToIndex[wire] + 1]
+                    if wire.resistance:
+                        # calculate potential drop due to resistor
+                        V[i] -= sign * wire.resistance(t) * x[wireToIndex[wire] + 1]
                 else:
                     R[i, wires[wire]] = sign * wire.resistance(t)
 
@@ -300,7 +302,7 @@ class Circuit:
 
         return intervals
 
-    def initialCurrents(self) -> Dict[Wire, float]:
+    def initialCurrents(self) -> Dict[some_wire, float]:
         """
         :return: a dictionary mapping each wire to current flowing in it
         """

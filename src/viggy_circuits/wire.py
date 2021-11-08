@@ -2,7 +2,6 @@ from __future__ import annotations
 
 from enum import IntEnum
 
-from .error import CircuitError
 from .switch import Switch
 from .junction import Junction
 
@@ -10,6 +9,10 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from typing import Tuple, Union, Callable
+
+    time_function = Callable[[float], float]
+    float_like = Union[time_function, float]
+    float_like_optional = Union[float_like, None]
 
 
 class Direction(IntEnum):
@@ -19,25 +22,18 @@ class Direction(IntEnum):
 
 
 class Wire:
-    def __init__(self, resistance: Union[Callable[[float], float], float],
-                 battery: Union[Callable[[float], float], float, None] = None,
-                 capacitance: Union[Callable[[float], float], float, None] = None,
-                 inductance: Union[Callable[[float], float], float, None] = None,
-                 initCharge=0.0, initCurrent=0.0):
-        self.__switch = Switch()
-
-        self.resistance = Wire.__process(resistance)
-        self.battery = Wire.__process(battery)  # internal battery
-        self.capacitance = Wire.__process(capacitance)
-        self.inductance = Wire.__process(inductance)
-        self.initCharge = initCharge
-        self.initCurrent = initCurrent  # only significant if inductance is not None
+    def __init__(self, battery: float_like_optional = None, switch=None):
+        self.battery = self.process(battery)
+        self.__switch = switch if switch else Switch()
 
         self.__junction1 = Junction()
         self.__junction2 = Junction()
 
     @staticmethod
-    def __process(x: Union[Callable[[float], float], float, None]) -> Union[Callable[[float], float], None]:
+    def process(x: float_like_optional) -> float_like_optional:
+        """
+        function to process a constant and turn it into function of time
+        """
         if callable(x) or x is None:
             return x
         else:
@@ -58,13 +54,6 @@ class Wire:
     @property
     def junctions(self) -> Tuple[Junction, Junction]:
         return self.__junction1, self.__junction2
-
-    @property
-    def isLCR(self) -> bool:
-        """
-        :return: whether Wire.device has capacitor, resistor and inductor
-        """
-        return self.inductance is not None
 
     def connect(self, junction1: Junction, junction2: Junction):
         """
@@ -92,19 +81,58 @@ class Wire:
         """
         return Direction.FORWARD if junction is self.junction1 else Direction.BACKWARD
 
-    def potentialDrop(self, t=0.0, q=0.0, i=0.0, di_dt=0.0):
-        v = 0.0
+    def potentialDrop(self, t=0.0):
+        return self.battery(t) if self.battery else 0.0
 
-        if self.battery is not None:
-            v += self.battery(t)
 
-        if self.resistance is not None:
-            v -= i * self.resistance(t)
+class ResistorWire(Wire):
+    def __init__(self, resistance: float_like,
+                 battery: float_like_optional = None,
+                 capacitance: float_like_optional = None,
+                 initCharge=0.0, switch=None):
+        super().__init__(battery, switch)
 
-        if self.capacitance is not None:
+        self.resistance = Wire.process(resistance)
+        self.capacitance = Wire.process(capacitance)
+
+        self.initCharge = initCharge
+
+        self.isLCR = False
+
+    def potentialDrop(self, t=0.0, q=0.0, i=0.0):
+        v = Wire.potentialDrop(self, t)
+
+        if self.capacitance:
             v -= q / self.capacitance(t)
 
-        if self.inductance is not None:
+        if self.resistance:
+            v -= i * self.resistance(t)
+
+        return v
+
+
+class InductorWire(ResistorWire):
+    def __init__(self, inductance: float_like,
+                 battery: float_like_optional = None,
+                 capacitance: float_like_optional = None,
+                 resistance: float_like_optional = None,
+                 initCharge=0.0, initCurrent=0.0, switch=None):
+        super().__init__(resistance, battery, capacitance, initCharge, switch)
+
+        self.inductance = Wire.process(inductance)
+
+        self.initCurrent = initCurrent
+
+        self.isLCR = True
+
+    def potentialDrop(self, t=0.0, q=0.0, i=0.0, di_dt=0.0):
+        v = ResistorWire.potentialDrop(self, t, q, i)
+
+        if self.inductance:
             v -= di_dt * self.inductance(t)
 
         return v
+
+
+if TYPE_CHECKING:
+    some_wire = Union[ResistorWire, InductorWire]

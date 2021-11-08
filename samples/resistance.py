@@ -10,15 +10,15 @@ def main():
     # Wires of a wheatstone bridge
 
     # first pair of arms
-    wireAB = Wire(resistance=1)
-    wireAC = Wire(resistance=4)
+    wireAB = ResistorWire(resistance=1)
+    wireAC = ResistorWire(resistance=4)
 
     # second pair of arms
-    wireDB = Wire(resistance=3)
-    wireDC = Wire(resistance=12)
+    wireDB = ResistorWire(resistance=3)
+    wireDC = ResistorWire(resistance=12)
 
     # the galvanometer wire
-    wireBC = Wire(resistance=4)
+    wireBC = ResistorWire(resistance=4)
 
     junctionA = Junction()
     junctionB = Junction()
@@ -33,7 +33,7 @@ def main():
     circuit.connect(junctionB, junctionC, wireBC)
 
     # a battery with some internal resistance is connected between A and D
-    battery = Wire(resistance=1, battery=1)
+    battery = ResistorWire(resistance=1, battery=1)
 
     circuit.connect(junctionA, junctionD, battery)
 

@@ -6,11 +6,11 @@ import numpy as np
 
 if TYPE_CHECKING:
     from typing import Dict, Iterable, OrderedDict
-    from .wire import Wire
+    from .wire import some_wire
 
 
 class WireSolution:
-    def __init__(self, wire: Wire):
+    def __init__(self, wire: some_wire):
         self.__wire = wire
         self.t = []
         self.q = []
@@ -28,10 +28,12 @@ class WireSolution:
         self.v = np.frompyfunc(self.__wire.potentialDrop, 4, 1)(self.t, self.q, self.i, self.di_dt)
 
         # power dissipated across resistor
-        self.powerR = np.square(self.i) * np.vectorize(self.__wire.resistance)(self.t)
+        if self.__wire.resistance:
+            self.powerR = np.square(self.i) * np.vectorize(self.__wire.resistance)(self.t)
 
         # energy stored in capacitor
-        self.energyC = 0.5 * np.square(self.q) / np.vectorize(self.__wire.capacitance)(self.t)
+        if self.__wire.capacitance:
+            self.energyC = 0.5 * np.square(self.q) / np.vectorize(self.__wire.capacitance)(self.t)
 
         # energy stored in inductor
         if self.__wire.isLCR:
@@ -67,17 +69,17 @@ class WireSolution:
 
 
 class Solution:
-    def __init__(self, wires: Iterable[Wire]):
-        self.__solutionOf: Dict[Wire, WireSolution] = dict([(wire, WireSolution(wire)) for wire in wires])
+    def __init__(self, wires: Iterable[some_wire]):
+        self.__solutionOf: Dict[some_wire, WireSolution] = dict([(wire, WireSolution(wire)) for wire in wires])
 
-    def __getitem__(self, item: Wire):
+    def __getitem__(self, item: some_wire):
         return self.__solutionOf[item]
 
     def freeze(self):
         for sol in self.__solutionOf.values():
             sol.freeze()
 
-    def lastKnownValues(self, wires: OrderedDict[Wire, int]):
+    def lastKnownValues(self, wires: OrderedDict[some_wire, int]):
         last = []
         for wire in wires:
             last.append(self[wire].lastQ)
@@ -87,7 +89,7 @@ class Solution:
         return last
 
     @staticmethod
-    def initialValues(wires: OrderedDict[Wire, int]):
+    def initialValues(wires: OrderedDict[some_wire, int]):
         x = []
         for wire in wires:
             x.append(wire.initCharge)
@@ -97,7 +99,7 @@ class Solution:
         return x
 
     @staticmethod
-    def mapWireToIndex(wires: OrderedDict[Wire, int]):
+    def mapWireToIndex(wires: OrderedDict[some_wire, int]):
         # map each wire to index of corresponding value in lastKnownValues
         indexMap = {}
 

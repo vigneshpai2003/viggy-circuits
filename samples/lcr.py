@@ -10,21 +10,20 @@ import matplotlib.pyplot as plt
 def main():
     circuit = Circuit()
 
-    wires = [Wire(resistance=lambda t: 1.5 + sin(t),
-                  battery=2.0,
-                  capacitance=1.0,
-                  inductance=0.2),
-             Wire(resistance=0.1,
-                  battery=generatorAC(emf=1.0, f=1.0, phi=0.5),  # AC generates an alternating emf function
-                  capacitance=1.0,
-                  inductance=0.01),
-             Wire(resistance=1.1,
-                  capacitance=lambda t: 1.5 + sin(t),
-                  initCharge=-5.0,
-                  inductance=1.0),
-             Wire(resistance=1.0,
-                  capacitance=1.0,
-                  inductance=lambda t: 1.5 + sin(t))]
+    wires = [InductorWire(inductance=0.2,
+                          battery=2.0,
+                          capacitance=1.0,
+                          resistance=lambda t: 1.5 + sin(t)),
+             InductorWire(inductance=0.01,
+                          battery=generatorAC(emf=1.0, f=1.0, phi=0.5),  # AC generates an alternating emf function
+                          capacitance=1.0),
+             InductorWire(inductance=1.0,
+                          capacitance=lambda t: 1.5 + sin(t),
+                          initCharge=-5.0,
+                          resistance=1.1),
+             InductorWire(inductance=lambda t: 1.5 + sin(t),
+                          capacitance=1.0,
+                          resistance=1.0)]
 
     junctions = [Junction(), Junction(), Junction()]
 
