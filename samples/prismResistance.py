@@ -23,7 +23,7 @@ def R(n):
     circuit.connect(polyA[1], battery)
 
     i = circuit.initialCurrents()[battery]
-    V = battery.potentialDrop(t=0, i=i)
+    V = battery.potentialDrop(i=i)
 
     # circuit.showGraph()
 

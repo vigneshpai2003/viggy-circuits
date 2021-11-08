@@ -1,13 +1,12 @@
 from __future__ import annotations
 
-import random
+from collections import OrderedDict
 
 import numpy as np
 from scipy import linalg, integrate
 import networkx as nx
 import matplotlib.pyplot as plt
 
-from .wireCollection import WireCollection
 from .solution import Solution
 
 from typing import TYPE_CHECKING
@@ -15,7 +14,7 @@ from typing import TYPE_CHECKING
 if TYPE_CHECKING:
     from typing import Set, List, Dict, Tuple, Callable, Any
 
-    from .wire import Wire
+    from .wire import Wire, Direction
     from .junction import Junction
 
 
@@ -78,14 +77,14 @@ class Circuit:
         self.__effectiveWires = self.__wires - self.__voidWires
         self.__effectiveJunctions = self.__junctions - self.__voidJunctions
 
-    def __firstLawEquations(self) -> Set[WireCollection]:
+    def __firstLawEquations(self) -> List[List[Tuple[Wire, Direction]]]:
         """
         if there are n Junctions, the sum of the equations formed by them is 0 (linearly dependent)
         this is because each wire shows up twice but with different sign each time
         It can also be proved that any n-1 Junction equations are linearly independent
         :return: the wires to be used in implementation of Kirchhoff's First Law
         """
-        equations: Set[WireCollection] = set()
+        equations: List[List[Tuple[Wire, Direction]]] = []
 
         junctionIter = iter(self.__effectiveJunctions)
         next(junctionIter)  # we dont need one junction
@@ -100,13 +99,12 @@ class Circuit:
                 in case only some are LCR, we already know their i values and hence they are not variables
                 """
                 allLCR = all([wire.isLCR for wire in junctionWires])
-                equations.add(WireCollection(*[(wire, wire.sign(junction))
-                                               for wire in junctionWires if not wire.isLCR or allLCR]))
+                equations.append([(wire, wire.sign(junction)) for wire in junctionWires if not wire.isLCR or allLCR])
 
             except StopIteration:
                 return equations
 
-    def __secondLawEquations(self) -> Set[WireCollection]:
+    def __secondLawEquations(self) -> List[List[Tuple[Wire, Direction]]]:
         """
         :return: the wires to be used in implementation of Kirchhoff's Second Law;
         """
@@ -123,15 +121,15 @@ class Circuit:
         """
         pseudoGraph = nx.Graph(graph)
 
-        equations = set()
-        parsedParallelWires = set()
+        equations: List[List[Tuple[Wire, Direction]]] = []
+        parsedParallelWires: Set[Wire] = set()
 
         for cycle in nx.algorithms.cycle_basis(nx.Graph(graph)):
-            equation = WireCollection()  # equation corresponding to cycle
+            equation = []  # equation corresponding to cycle
             for i in range(len(cycle)):
                 junction1, junction2 = cycle[i - 1], cycle[i]
                 wire = pseudoGraph.edges[junction1, junction2]["wire"]
-                equation.append(wire, wire.sign(junction1))
+                equation.append((wire, wire.sign(junction1)))
 
                 # get all the parallel wires that havent already been parsed
                 parallelWires = set()
@@ -143,20 +141,20 @@ class Circuit:
 
                 # add the KVL equations for the parallelWires
                 for parallelWire in parallelWires:
-                    equations.add(WireCollection((wire, wire.sign(junction1)),
-                                                 (parallelWire, parallelWire.sign(junction2))))
+                    equations.append([(wire, wire.sign(junction1)),
+                                      (parallelWire, parallelWire.sign(junction2))])
 
                 # mark these parallel wires as parsed
                 parsedParallelWires.update(parallelWires)
 
-            equations.add(equation)
+            equations.append(equation)
 
         return equations
 
     @staticmethod
-    def __derivatives(t: float, x: np.ndarray, wires: List[Wire], wireToIndex: Dict[Wire, int],
-                      firstLawEquations: Set[WireCollection],
-                      secondLawEquations: Set[WireCollection]) -> np.ndarray:
+    def __derivatives(t: float, x: np.ndarray, wires: OrderedDict, wireToIndex: Dict[Wire, int],
+                      firstLawEquations: List[List[Tuple[Wire, Direction]]],
+                      secondLawEquations: List[List[Tuple[Wire, Direction]]]) -> np.ndarray:
         """
         :param t: time
         :param x: a list of charge and current values
@@ -177,12 +175,12 @@ class Circuit:
         # fill R, V using first law
         i = 0
         for equation in firstLawEquations:
-            allLCR = all([wire.isLCR for wire in equation.wires])
+            allLCR = all([wire.isLCR for wire, sign in equation])
             for wire, sign in equation:
                 if wire.isLCR and not allLCR:
                     V[i] -= sign * x[wireToIndex[wire] + 1]
                 else:
-                    R[i, wires.index(wire)] = sign
+                    R[i, wires[wire]] = sign
 
             i += 1
 
@@ -190,12 +188,12 @@ class Circuit:
         for equation in secondLawEquations:
             for wire, sign in equation:
                 if wire.isLCR:
-                    R[i, wires.index(wire)] = sign * wire.inductance(t)
+                    R[i, wires[wire]] = sign * wire.inductance(t)
 
                     # calculate potential drop due to resistor
                     V[i] -= sign * wire.resistance(t) * x[wireToIndex[wire] + 1]
                 else:
-                    R[i, wires.index(wire)] = sign * wire.resistance(t)
+                    R[i, wires[wire]] = sign * wire.resistance(t)
 
                 # potential drop due to battery
                 if wire.battery is not None:
@@ -214,9 +212,9 @@ class Circuit:
         for wire in wires:
             if wire.isLCR:
                 dx_dt[wireToIndex[wire]] = x[wireToIndex[wire] + 1]  # i is already in input
-                dx_dt[wireToIndex[wire] + 1] = derivatives[wires.index(wire)]  # di_dt
+                dx_dt[wireToIndex[wire] + 1] = derivatives[wires[wire]]  # di_dt
             else:
-                dx_dt[wireToIndex[wire]] = derivatives[wires.index(wire)]  # i
+                dx_dt[wireToIndex[wire]] = derivatives[wires[wire]]  # i
 
         return dx_dt
 
@@ -226,8 +224,7 @@ class Circuit:
         for (start, stop), events in self.__getIntervals(end):
             # calculate effective wires and junctions
             self.__simplifyCircuit()
-            degree = len(self.__effectiveWires)
-            wires = random.sample(list(self.__effectiveWires), degree)
+            wires = OrderedDict([(wire, i) for i, wire in enumerate(self.__effectiveWires)])
 
             # set initial conditions of simulation
             initConditions = solution.lastKnownValues(wires)
@@ -310,8 +307,7 @@ class Circuit:
         """
         # calculate effective wires and junctions
         self.__simplifyCircuit()
-        degree = len(self.__effectiveWires)
-        wires = random.sample(list(self.__effectiveWires), degree)
+        wires = OrderedDict([(wire, i) for i, wire in enumerate(self.__effectiveWires)])
 
         x = Solution.initialValues(wires)
         indexOf = Solution.mapWireToIndex(wires)

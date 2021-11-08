@@ -41,8 +41,8 @@ by default they are `0.0`.
 
 Example:
 ```
-wire = Wire(Device(resistance = 1.0,
-                   capacitance = lambda t: 3.0 + math.sin(t)))
+wire = Wire(resistance = 1.0,
+            capacitance = lambda t: 3.0 + math.sin(t))
 ```
 
 #### Connecting Wires

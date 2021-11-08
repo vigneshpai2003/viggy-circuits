@@ -5,7 +5,7 @@ from typing import TYPE_CHECKING
 import numpy as np
 
 if TYPE_CHECKING:
-    from typing import Dict, List, Iterable
+    from typing import Dict, Iterable, OrderedDict
     from .wire import Wire
 
 
@@ -77,7 +77,7 @@ class Solution:
         for sol in self.__solutionOf.values():
             sol.freeze()
 
-    def lastKnownValues(self, wires: List[Wire]):
+    def lastKnownValues(self, wires: OrderedDict[Wire, int]):
         last = []
         for wire in wires:
             last.append(self[wire].lastQ)
@@ -87,7 +87,7 @@ class Solution:
         return last
 
     @staticmethod
-    def initialValues(wires: List[Wire]):
+    def initialValues(wires: OrderedDict[Wire, int]):
         x = []
         for wire in wires:
             x.append(wire.initCharge)
@@ -97,7 +97,7 @@ class Solution:
         return x
 
     @staticmethod
-    def mapWireToIndex(wires: List[Wire]):
+    def mapWireToIndex(wires: OrderedDict[Wire, int]):
         # map each wire to index of corresponding value in lastKnownValues
         indexMap = {}
 

@@ -8,15 +8,15 @@ circuit = Circuit()
 # Wires of a wheatstone bridge
 
 # first pair of arms
-wireAB = Wire(Device(resistance=1))
-wireAC = Wire(Device(resistance=4))
+wireAB = Wire(resistance=1)
+wireAC = Wire(resistance=4)
 
 # second pair of arms
-wireDB = Wire(Device(resistance=3))
-wireDC = Wire(Device(resistance=12))
+wireDB = Wire(resistance=3)
+wireDC = Wire(resistance=12)
 
 # the galvanometer wire
-wireBC = Wire(Device(resistance=4))
+wireBC = Wire(resistance=4)
 
 junctionA = Junction()
 junctionB = Junction()
@@ -30,7 +30,7 @@ circuit.connect(junctionB, wireAB, wireDB, wireBC)
 circuit.connect(junctionC, wireAC, wireDC, wireBC)
 
 # a battery with some internal resistance is connected between A and D
-battery = Wire(Device(resistance=1, battery=1))
+battery = Wire(resistance=1, battery=1)
 
 circuit.connect(junctionA, battery)
 circuit.connect(junctionD, battery)
@@ -39,6 +39,6 @@ circuit.connect(junctionD, battery)
 solution = circuit.initialCurrents()
 
 i = solution[battery]
-V = battery.device.potentialDrop(t=0, i=i)
+V = battery.potentialDrop(i=i)
 
 print(f"Resistance of wheatstone bridge is {abs(V / i)}")

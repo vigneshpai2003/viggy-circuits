@@ -1,6 +1,7 @@
 from __future__ import annotations
 
-from .wireCollection import Direction
+from enum import IntEnum
+
 from .error import CircuitError
 from .switch import Switch
 from .junction import Junction
@@ -9,6 +10,12 @@ from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
     from typing import Tuple, Union, Callable
+
+
+class Direction(IntEnum):
+    BACKWARD = -1
+    NULL = 0
+    FORWARD = 1
 
 
 class Wire:
@@ -104,7 +111,7 @@ class Wire:
     def sign(self, junction: Junction) -> Direction:
         return Direction.FORWARD if junction is self.junction1 else Direction.BACKWARD
 
-    def potentialDrop(self, t: float, q=0.0, i=0.0, di_dt=0.0):
+    def potentialDrop(self, t=0.0, q=0.0, i=0.0, di_dt=0.0):
         v = 0.0
 
         if self.battery is not None:
