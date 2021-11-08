@@ -8,23 +8,33 @@ from .junction import Junction
 from typing import TYPE_CHECKING
 
 if TYPE_CHECKING:
-    from typing import Tuple
-
-    from .device import Device
+    from typing import Tuple, Union, Callable
 
 
 class Wire:
-    def __init__(self, device: Device):
+    def __init__(self, resistance: Union[Callable[[float], float], float],
+                 battery: Union[Callable[[float], float], float, None] = None,
+                 capacitance: Union[Callable[[float], float], float, None] = None,
+                 inductance: Union[Callable[[float], float], float, None] = None,
+                 initCharge=0.0, initCurrent=0.0):
         self.__switch = Switch()
 
-        self.__device = device
+        self.resistance = Wire.__process(resistance)
+        self.battery = Wire.__process(battery)  # internal battery
+        self.capacitance = Wire.__process(capacitance)
+        self.inductance = Wire.__process(inductance)
+        self.initCharge = initCharge
+        self.initCurrent = initCurrent  # only significant if inductance is not None
 
         self.__junction1 = Junction()
         self.__junction2 = Junction()
 
-    @property
-    def device(self) -> Device:
-        return self.__device
+    @staticmethod
+    def __process(x: Union[Callable[[float], float], float, None]) -> Union[Callable[[float], float], None]:
+        if callable(x) or x is None:
+            return x
+        else:
+            return lambda t: x
 
     @property
     def switch(self) -> Switch:
@@ -47,7 +57,7 @@ class Wire:
         """
         :return: whether Wire.device has capacitor, resistor and inductor
         """
-        return self.device.inductance is not None
+        return self.inductance is not None
 
     def connect(self, junction: Junction):
         """
@@ -93,3 +103,20 @@ class Wire:
 
     def sign(self, junction: Junction) -> Direction:
         return Direction.FORWARD if junction is self.junction1 else Direction.BACKWARD
+
+    def potentialDrop(self, t: float, q=0.0, i=0.0, di_dt=0.0):
+        v = 0.0
+
+        if self.battery is not None:
+            v += self.battery(t)
+
+        if self.resistance is not None:
+            v -= i * self.resistance(t)
+
+        if self.capacitance is not None:
+            v -= q / self.capacitance(t)
+
+        if self.inductance is not None:
+            v -= di_dt * self.inductance(t)
+
+        return v

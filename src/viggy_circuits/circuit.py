@@ -128,8 +128,8 @@ class Circuit:
 
         for cycle in nx.algorithms.cycle_basis(nx.Graph(graph)):
             equation = WireCollection()  # equation corresponding to cycle
-            for i in range(-1, len(cycle) - 1):
-                junction1, junction2 = cycle[i], cycle[i + 1]
+            for i in range(len(cycle)):
+                junction1, junction2 = cycle[i - 1], cycle[i]
                 wire = pseudoGraph.edges[junction1, junction2]["wire"]
                 equation.append(wire, wire.sign(junction1))
 
@@ -178,8 +178,7 @@ class Circuit:
         i = 0
         for equation in firstLawEquations:
             allLCR = all([wire.isLCR for wire in equation.wires])
-            for wire in equation.wires:
-                sign = equation.getSign(wire)
+            for wire, sign in equation:
                 if wire.isLCR and not allLCR:
                     V[i] -= sign * x[wireToIndex[wire] + 1]
                 else:
@@ -189,31 +188,26 @@ class Circuit:
 
         # fill R, V using second law
         for equation in secondLawEquations:
-            for wire in equation.wires:
-                sign = equation.getSign(wire)
-
+            for wire, sign in equation:
                 if wire.isLCR:
-                    R[i, wires.index(wire)] = sign * wire.device.inductance(t)
+                    R[i, wires.index(wire)] = sign * wire.inductance(t)
 
                     # calculate potential drop due to resistor
-                    V[i] -= sign * wire.device.resistance(t) * x[wireToIndex[wire] + 1]
+                    V[i] -= sign * wire.resistance(t) * x[wireToIndex[wire] + 1]
                 else:
-                    R[i, wires.index(wire)] = sign * wire.device.resistance(t)
+                    R[i, wires.index(wire)] = sign * wire.resistance(t)
 
                 # potential drop due to battery
-                if wire.device.battery is not None:
-                    V[i] += sign * wire.device.battery(t)
+                if wire.battery is not None:
+                    V[i] += sign * wire.battery(t)
 
                 # potential drop due to capacitor
-                if wire.device.capacitance is not None:
-                    V[i] -= sign * x[wireToIndex[wire]] / wire.device.capacitance(t)
+                if wire.capacitance is not None:
+                    V[i] -= sign * x[wireToIndex[wire]] / wire.capacitance(t)
 
             i += 1
 
-        try:
-            derivatives = linalg.solve(R, V)
-        except linalg.LinAlgError:
-            print(firstLawEquations, secondLawEquations)
+        derivatives = linalg.solve(R, V)
 
         dx_dt = np.zeros_like(x)
 

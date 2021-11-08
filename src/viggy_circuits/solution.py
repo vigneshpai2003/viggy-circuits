@@ -25,17 +25,17 @@ class WireSolution:
             self.di_dt = np.array(self.di_dt)
 
         # potential difference across wire ends
-        self.v = np.frompyfunc(self.__wire.device.potentialDrop, 4, 1)(self.t, self.q, self.i, self.di_dt)
+        self.v = np.frompyfunc(self.__wire.potentialDrop, 4, 1)(self.t, self.q, self.i, self.di_dt)
 
         # power dissipated across resistor
-        self.powerR = np.square(self.i) * np.vectorize(self.__wire.device.resistance)(self.t)
+        self.powerR = np.square(self.i) * np.vectorize(self.__wire.resistance)(self.t)
 
         # energy stored in capacitor
-        self.energyC = 0.5 * np.square(self.q) / np.vectorize(self.__wire.device.capacitance)(self.t)
+        self.energyC = 0.5 * np.square(self.q) / np.vectorize(self.__wire.capacitance)(self.t)
 
         # energy stored in inductor
         if self.__wire.isLCR:
-            self.energyL = 0.5 * np.square(self.i) * np.vectorize(self.__wire.device.inductance)(self.t)
+            self.energyL = 0.5 * np.square(self.i) * np.vectorize(self.__wire.inductance)(self.t)
 
     def __iter__(self):  # allows unpacking of this object
         """
@@ -45,11 +45,11 @@ class WireSolution:
 
     @property
     def lastQ(self):
-        return self.q[-1] if self.q else self.__wire.device.initCharge
+        return self.q[-1] if self.q else self.__wire.initCharge
 
     @property
     def lastI(self):
-        return self.i[-1] if self.i else self.__wire.device.initCurrent
+        return self.i[-1] if self.i else self.__wire.initCurrent
 
     def update(self, t, q, i, di_dt=None):
         self.t.append(t)
@@ -90,9 +90,9 @@ class Solution:
     def initialValues(wires: List[Wire]):
         x = []
         for wire in wires:
-            x.append(wire.device.initCharge)
+            x.append(wire.initCharge)
             if wire.isLCR:
-                x.append(wire.device.initCurrent)
+                x.append(wire.initCurrent)
 
         return x
 

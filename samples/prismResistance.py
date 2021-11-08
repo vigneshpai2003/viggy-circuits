@@ -7,23 +7,23 @@ def R(n):
     polyA = [Junction() for _ in range(n)]
     polyB = [Junction() for _ in range(n)]
 
-    polyAWires = [Wire(Device(resistance=1)) for _ in range(n)]
-    polyBWires = [Wire(Device(resistance=1)) for _ in range(n)]
-    ABWires = [Wire(Device(resistance=1)) for _ in range(n)]
+    polyAWires = [Wire(resistance=1) for _ in range(n)]
+    polyBWires = [Wire(resistance=1) for _ in range(n)]
+    ABWires = [Wire(resistance=1) for _ in range(n)]
 
     # make the connections of the prism
     for j in range(n):
         circuit.connect(polyA[j], polyAWires[j], polyAWires[j-1], ABWires[j])
         circuit.connect(polyB[j], polyBWires[j], polyBWires[j-1], ABWires[j])
 
-    battery = Wire(Device(resistance=1, battery=1))
+    battery = Wire(resistance=1, battery=1)
 
     # connect battery to first two vertices of A
     circuit.connect(polyA[0], battery)
     circuit.connect(polyA[1], battery)
 
     i = circuit.initialCurrents()[battery]
-    V = battery.device.potentialDrop(t=0, i=i)
+    V = battery.potentialDrop(t=0, i=i)
 
     # circuit.showGraph()
 
